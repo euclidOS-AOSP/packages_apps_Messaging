@@ -63,6 +63,8 @@ import com.android.messaging.datamodel.media.MediaRequest;
 import com.android.messaging.datamodel.media.MediaResourceManager;
 import com.android.messaging.datamodel.media.MessagePartVideoThumbnailRequestDescriptor;
 import com.android.messaging.datamodel.media.UriImageRequestDescriptor;
+import com.android.messaging.datamodel.media.VideoThumbnailRequest;
+import com.android.messaging.receiver.CaptchaCodeReceiver;
 import com.android.messaging.sms.MmsSmsUtils;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.ui.UIIntents;
@@ -71,6 +73,7 @@ import com.android.messaging.util.AvatarUriUtil;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.BuglePrefs;
 import com.android.messaging.util.BuglePrefsKeys;
+import com.android.messaging.util.CaptchaUtil;
 import com.android.messaging.util.ConversationIdSet;
 import com.android.messaging.util.ImageUtils;
 import com.android.messaging.util.LogUtil;
@@ -735,9 +738,19 @@ public class BugleNotifications {
                     .bigLargeIcon(avatarBitmap);
                 notificationState.mNotificationBuilder.setLargeIcon(smallBitmap);
             }
-
+            final MultiMessageNotificationState multiMessageNotificationState =
+                (MultiMessageNotificationState) notificationState;
+            final ConversationLineInfo convInfo = multiMessageNotificationState.mConvList.mConvInfos.get(0);
+            String content = multiMessageNotificationState.mContent.toString();                
+            String captcha = CaptchaUtil.getCaptcha(context, content);
+                
             addDownloadMmsAction(notifBuilder, wearableExtender, notificationState);
-            addWearableVoiceReplyAction(notifBuilder, wearableExtender, notificationState);
+            if (!TextUtils.isEmpty(captcha)) {
+                addCopyCaptchaAction(notifBuilder, wearableExtender, notificationState, captcha);
+            } else {
+                addWearableVoiceReplyAction(notifBuilder, wearableExtender, notificationState);
+            }
+            addReadAction(notifBuilder, wearableExtender, notificationState);
         }
 
         // Apply the wearable options and build & post the notification
@@ -806,6 +819,39 @@ public class BugleNotifications {
         wearActionBuilder.addRemoteInput(remoteInputBuilder.build());
         wearableExtender.addAction(wearActionBuilder.build());
     }
+
+    private static void addReadAction(final NotificationCompat.Builder notifBuilder,
+            final WearableExtender wearableExtender, final NotificationState notificationState) {
+        final Context context = Factory.get().getApplicationContext();
+        final PendingIntent readPendingIntent = notificationState.getReadIntent();
+        final NotificationCompat.Action.Builder readActionBuilder =
+                new NotificationCompat.Action.Builder(R.drawable.ic_wear_read,
+                        context.getString(R.string.notification_mark_as_read), readPendingIntent);
+        notifBuilder.addAction(readActionBuilder.build());
+        // Support the action on a wearable device as well
+        wearableExtender.addAction(readActionBuilder.build());
+    }
+
+    private static void addCopyCaptchaAction(final NotificationCompat.Builder notifBuilder,
+                                         final WearableExtender wearableExtender, final NotificationState notificationState, final String captcha) {
+        final Context context = Factory.get().getApplicationContext();
+
+        final Intent intent = new Intent(); 
+        intent.setClass(context, CaptchaCodeReceiver.class);
+        intent.putExtra("chapataCode", captcha);
+        intent.putExtra("conversationId", notificationState.mConversationIds.first());
+        
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        flags |= PendingIntent.FLAG_IMMUTABLE;
+
+        PendingIntent captchaIntent = PendingIntent.getBroadcast(context, 0, intent, flags);
+        final NotificationCompat.Action.Builder readActionBuilder =
+                new NotificationCompat.Action.Builder(0, String.format(context.getString(R.string.captcha_copy_action), captcha), captchaIntent);
+        notifBuilder.addAction(readActionBuilder.build());
+        final NotificationCompat.Action wearableAction = 
+                new NotificationCompat.Action.Builder(0, String.format(context.getString(R.string.captcha_copy_action), captcha), captchaIntent).build();
+        wearableExtender.addAction(wearableAction);
+}
 
     private static void addDownloadMmsAction(final NotificationCompat.Builder notifBuilder,
             final WearableExtender wearableExtender, final NotificationState notificationState) {

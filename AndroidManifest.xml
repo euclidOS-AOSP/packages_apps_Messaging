@@ -331,6 +331,8 @@
             </intent-filter>
         </receiver>
 
+        <receiver android:name=".receiver.CaptchaCodeReceiver" android:exported="false" />
+
         <!-- Intents for KLP+ Delivery -->
         <receiver
             android:name=".receiver.MmsWapPushDeliverReceiver"

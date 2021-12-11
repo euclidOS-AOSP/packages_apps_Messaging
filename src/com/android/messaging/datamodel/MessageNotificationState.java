@@ -95,6 +95,7 @@ public abstract class MessageNotificationState extends NotificationState {
 
     private static final int REPLY_INTENT_REQUEST_CODE_OFFSET = 0;
     private static final int NUM_EXTRA_REQUEST_CODES_NEEDED = 1;
+    private static final int READ_INTENT_REQUEST_CODE_OFFSET = 2;
     protected String mTickerSender = null;
     protected CharSequence mTickerText = null;
     protected String mTitle = null;
@@ -285,6 +286,10 @@ public abstract class MessageNotificationState extends NotificationState {
         return set;
     }
 
+    public int getReadIntentRequestCode() {
+        return mBaseRequestCode + READ_INTENT_REQUEST_CODE_OFFSET;
+    }
+
     protected MessageNotificationState(final ConversationInfoList convList) {
         super(makeConversationIdSet(convList));
         mConvList = convList;
@@ -301,6 +306,14 @@ public abstract class MessageNotificationState extends NotificationState {
     @Override
     public long getLatestReceivedTimestamp() {
         return mLatestReceivedTimestamp;
+    }
+
+    @Override
+    public PendingIntent getReadIntent() {
+        return UIIntents.get().getPendingIntentForMarkingAsRead(
+                    Factory.get().getApplicationContext(),
+                    mConversationIds,
+                    getReadIntentRequestCode());
     }
 
     @Override

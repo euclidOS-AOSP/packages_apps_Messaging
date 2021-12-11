@@ -79,6 +79,8 @@ public abstract class NotificationState {
      */
     public abstract PendingIntent getClearIntent();
 
+    public abstract PendingIntent getReadIntent();
+
     protected Uri getAttachmentUri() {
         return null;
     }

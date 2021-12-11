@@ -149,6 +149,9 @@ public abstract class UIIntents {
     public abstract void launchConversationActivityNewTask(final Context context,
             final String conversationId);
 
+    public abstract PendingIntent getPendingIntentForMarkingAsRead(final Context context,
+            final ConversationIdSet conversationIdSet, final int requestCode);
+
     /**
      * Launch an activity to start a new conversation
      */

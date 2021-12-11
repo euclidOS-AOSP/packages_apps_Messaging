@@ -76,6 +76,8 @@ public class UIIntentsImpl extends UIIntents {
             "com.android.providers.media.MediaScannerService";
     private static final String MEDIA_SCANNER_PACKAGE = "com.android.providers.media";
     private static final String MEDIA_SCANNER_SCAN_ACTION = "android.media.IMediaScannerService";
+    public static final String ACTION_MARK_AS_READ =
+            "com.android.messaging.mark_as_read";
 
     /**
      * Get an intent which takes you to a conversation
@@ -176,6 +178,24 @@ public class UIIntentsImpl extends UIIntents {
                         getConversationActivityIntent(context, conversationId, messageData,
                                 false /* withCustomTransition */))
                 .startActivities();
+    }
+
+    @Override
+    public PendingIntent getPendingIntentForMarkingAsRead(final Context context,
+            final ConversationIdSet conversationIdSet, final int requestCode) {
+        final Intent intent = new Intent(context, NotificationReceiver.class);
+        intent.setAction(ACTION_MARK_AS_READ);
+        if (conversationIdSet != null) {
+            intent.putExtra(UI_INTENT_EXTRA_CONVERSATION_ID_SET,
+                    conversationIdSet.getDelimitedString());
+        }
+        
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        flags |= PendingIntent.FLAG_IMMUTABLE;
+        
+        return PendingIntent.getBroadcast(context,
+                requestCode, intent,
+                flags); 
     }
 
     @Override
