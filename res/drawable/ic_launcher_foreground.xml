@@ -4,31 +4,18 @@
      SPDX-License-Identifier: Apache-2.0
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
-    android:viewportHeight="108">
-  <group>
-    <clip-path
-        android:pathData="M0,0h108v108h-108z"/>
+    android:viewportHeight="108"
+    android:tint="#FFFFFF">
+  <group android:scaleX="0.7"
+      android:scaleY="0.7"
+      android:translateX="17"
+      android:translateY="17">
     <path
-        android:pathData="M54,66C60.75,66 66,63.627 66,57C66,47.373 60.75,42 54,42C47.25,42 42,47.373 42,57C42,63.627 47.25,66 54,66ZM54,57.5C57.057,57.5 60.055,56.942 62,56C61.125,58.603 59.333,62 54,62C48.667,62 46.875,58.603 46,56C47.945,56.942 50.943,57.5 54,57.5Z"
-        android:fillColor="#143721"
-        android:fillType="evenOdd"/>
-    <path
-        android:pathData="M28.54,28.54m-72,0a72,72 0,1 1,144 0a72,72 0,1 1,-144 0"
-        android:fillAlpha="0.6">
-      <aapt:attr name="android:fillColor">
-        <gradient
-            android:gradientRadius="72"
-            android:centerX="28.54"
-            android:centerY="28.54"
-            android:type="radial">
-          <item android:offset="0" android:color="#19FFFFFF"/>
-          <item android:offset="1" android:color="#00FFFFFF"/>
-        </gradient>
-      </aapt:attr>
-    </path>
+        android:fillColor="@android:color/white"
+        android:pathData="M58.32,28.08C64.81,28.08 71.04,30.66 75.63,35.25C80.22,39.84 82.8,46.07 82.8,52.56C82.8,59.05 80.22,65.28 75.63,69.87C71.04,74.46 64.81,77.04 58.32,77.04H56.88V79.89C56.88,80.27 56.81,80.65 56.66,81.01C56.51,81.36 56.3,81.68 56.03,81.95C55.76,82.22 55.44,82.43 55.08,82.58C54.73,82.73 54.35,82.8 53.97,82.8C46.88,82.79 39.71,80.43 34.26,75.59C28.77,70.7 25.21,63.43 25.2,54.03V52.56C25.2,46.07 27.78,39.84 32.37,35.25C36.96,30.66 43.19,28.08 49.68,28.08H58.32ZM43.92,48.24C42.78,48.24 41.68,48.7 40.87,49.51C40.06,50.32 39.6,51.41 39.6,52.56C39.6,53.71 40.06,54.8 40.87,55.61C41.68,56.42 42.78,56.88 43.92,56.88C45.07,56.88 46.17,56.42 46.98,55.61C47.79,54.8 48.24,53.71 48.24,52.56C48.24,51.41 47.79,50.32 46.98,49.51C46.17,48.7 45.07,48.24 43.92,48.24ZM64.08,48.24C62.94,48.24 61.84,48.7 61.03,49.51C60.22,50.32 59.76,51.41 59.76,52.56C59.76,53.71 60.22,54.8 61.03,55.61C61.84,56.42 62.94,56.88 64.08,56.88C65.23,56.88 66.33,56.42 67.14,55.61C67.95,54.8 68.4,53.71 68.4,52.56C68.4,51.41 67.95,50.32 67.14,49.51C66.33,48.7 65.23,48.24 64.08,48.24Z"/>
   </group>
 </vector>
+
