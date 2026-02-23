@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +22,8 @@ import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.text.TextUtils;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.datamodel.BugleDatabaseOperations;
 import com.android.messaging.datamodel.DataModel;
@@ -116,7 +119,7 @@ public class DeleteMessageAction extends Action implements Parcelable {
     }
 
     public static final Parcelable.Creator<DeleteMessageAction> CREATOR
-            = new Parcelable.Creator<DeleteMessageAction>() {
+            = new Parcelable.Creator<>() {
         @Override
         public DeleteMessageAction createFromParcel(final Parcel in) {
             return new DeleteMessageAction(in);
@@ -129,7 +132,7 @@ public class DeleteMessageAction extends Action implements Parcelable {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

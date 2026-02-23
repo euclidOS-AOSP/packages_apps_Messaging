@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +20,14 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.AlertDialog.Builder;
 import android.app.Dialog;
-import android.app.DialogFragment;
+import android.content.Context;
 import android.content.DialogInterface;
-import android.content.DialogInterface.OnClickListener;
 import android.database.Cursor;
 import android.os.Bundle;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.DialogFragment;
+import androidx.loader.app.LoaderManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -47,8 +51,8 @@ public class ShareIntentFragment extends DialogFragment implements ConversationL
     public static final String HIDE_NEW_CONVERSATION_BUTTON_KEY = "hide_conv_button_key";
 
     public interface HostInterface {
-        public void onConversationClick(final ConversationListItemData conversationListItemData);
-        public void onCreateConversationClick();
+        void onConversationClick(final ConversationListItemData conversationListItemData);
+        void onCreateConversationClick();
     }
 
     private final Binding<ConversationListData> mListBinding = BindingBase.createBinding(this);
@@ -61,12 +65,13 @@ public class ShareIntentFragment extends DialogFragment implements ConversationL
     /**
      * {@inheritDoc} from Fragment
      */
+    @NonNull
     @Override
     public Dialog onCreateDialog(final Bundle bundle) {
         final Activity activity = getActivity();
         final LayoutInflater inflater = activity.getLayoutInflater();
         View view = inflater.inflate(R.layout.share_intent_conversation_list_view, null);
-        mEmptyListMessageView = (ListEmptyView) view.findViewById(R.id.no_conversations_view);
+        mEmptyListMessageView = view.findViewById(R.id.no_conversations_view);
         mEmptyListMessageView.setImageHint(R.drawable.ic_oobe_conv_list);
         // The default behavior for default layout param generation by LinearLayoutManager is to
         // provide width and height of WRAP_CONTENT, but this is not desirable for
@@ -79,9 +84,9 @@ public class ShareIntentFragment extends DialogFragment implements ConversationL
                         ViewGroup.LayoutParams.WRAP_CONTENT);
             }
         };
-        mListBinding.getData().init(getLoaderManager(), mListBinding);
+        mListBinding.getData().init(LoaderManager.getInstance(this), mListBinding);
         mAdapter = new ShareIntentAdapter(activity, null, this);
-        mRecyclerView = (RecyclerView) view.findViewById(android.R.id.list);
+        mRecyclerView = view.findViewById(android.R.id.list);
         mRecyclerView.setLayoutManager(manager);
         mRecyclerView.setHasFixedSize(true);
         mRecyclerView.setAdapter(mAdapter);
@@ -91,20 +96,17 @@ public class ShareIntentFragment extends DialogFragment implements ConversationL
 
         final Bundle arguments = getArguments();
         if (arguments == null || !arguments.getBoolean(HIDE_NEW_CONVERSATION_BUTTON_KEY)) {
-            dialogBuilder.setPositiveButton(R.string.share_new_message, new OnClickListener() {
-                        @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                            mDismissed = true;
-                            mHost.onCreateConversationClick();
-                    }
-                });
+            dialogBuilder.setPositiveButton(R.string.share_new_message, (dialog, which) -> {
+                mDismissed = true;
+                mHost.onCreateConversationClick();
+        });
         }
         return dialogBuilder.setNegativeButton(R.string.share_cancel, null)
                 .create();
     }
 
     @Override
-    public void onDismiss(DialogInterface dialog) {
+    public void onDismiss(@NonNull DialogInterface dialog) {
         if (!mDismissed) {
             final Activity activity = getActivity();
             if (activity != null) {
@@ -123,12 +125,12 @@ public class ShareIntentFragment extends DialogFragment implements ConversationL
     }
 
     @Override
-    public void onAttach(final Activity activity) {
-        super.onAttach(activity);
-        if (activity instanceof HostInterface) {
-            mHost = (HostInterface) activity;
+    public void onAttach(@NonNull final Context context) {
+        super.onAttach(context);
+        if (context instanceof HostInterface) {
+            mHost = (HostInterface) context;
         }
-        mListBinding.bind(DataModel.get().createConversationListData(activity, this, false));
+        mListBinding.bind(DataModel.get().createConversationListData(context, this, false));
     }
 
     @Override

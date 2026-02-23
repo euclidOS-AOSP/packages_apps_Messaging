@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +25,8 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.Sms;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.BugleDatabaseOperations;
@@ -190,9 +193,9 @@ public class SendMessageAction extends Action implements Parcelable {
      */
     @Override
     protected Bundle doBackgroundWork() {
-        final MessageData message = actionParameters.getParcelable(KEY_MESSAGE);
+        final MessageData message = actionParameters.getParcelable(KEY_MESSAGE, MessageData.class);
         final String messageId = actionParameters.getString(KEY_MESSAGE_ID);
-        Uri messageUri = actionParameters.getParcelable(KEY_MESSAGE_URI);
+        Uri messageUri = actionParameters.getParcelable(KEY_MESSAGE_URI, Uri.class);
         Uri updatedMessageUri = null;
         final boolean isSms = message.getProtocol() == MessageData.PROTOCOL_SMS;
         final int subId = actionParameters.getInt(KEY_SUB_ID, ParticipantData.DEFAULT_SELF_SUB_ID);
@@ -232,11 +235,9 @@ public class SendMessageAction extends Action implements Parcelable {
                     // To prevent Sync seeing inconsistent state must write to DB on this thread
                     updateMessageUri(messageId, updatedMessageUri);
 
-                    if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                        LogUtil.v(TAG, "SendMessageAction: Updated message " + messageId
-                                + " with new uri " + messageUri);
-                    }
-                 }
+                    LogUtil.v(TAG, "SendMessageAction: Updated message " + messageId
+                            + " with new uri " + messageUri);
+                }
             }
             if (messageUri != null) {
                 // Actually send the MMS
@@ -291,7 +292,7 @@ public class SendMessageAction extends Action implements Parcelable {
     @Override
     protected Object processBackgroundFailure() {
         final String messageId = actionParameters.getString(KEY_MESSAGE_ID);
-        final MessageData message = actionParameters.getParcelable(KEY_MESSAGE);
+        final MessageData message = actionParameters.getParcelable(KEY_MESSAGE, MessageData.class);
         final boolean isSms = message.getProtocol() == MessageData.PROTOCOL_SMS;
         final int subId = actionParameters.getInt(KEY_SUB_ID, ParticipantData.DEFAULT_SELF_SUB_ID);
         final int resultCode = actionParameters.getInt(ProcessSentMessageAction.KEY_RESULT_CODE);
@@ -375,11 +376,9 @@ public class SendMessageAction extends Action implements Parcelable {
             }
         }
         if (updatedTelephony) {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "SendMessageAction: Updated " + (isSms ? "SMS" : "MMS")
-                        + " message " + message.getMessageId()
-                        + " in telephony (" + message.getSmsMessageUri() + ")");
-            }
+            LogUtil.v(TAG, "SendMessageAction: Updated " + (isSms ? "SMS" : "MMS")
+                    + " message " + message.getMessageId()
+                    + " in telephony (" + message.getSmsMessageUri() + ")");
         } else {
             LogUtil.w(TAG, "SendMessageAction: Failed to update " + (isSms ? "SMS" : "MMS")
                     + " message " + message.getMessageId()
@@ -411,11 +410,9 @@ public class SendMessageAction extends Action implements Parcelable {
                         values);
             }
             db.setTransactionSuccessful();
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "SendMessageAction: Updated " + (isSms ? "SMS" : "MMS")
-                        + " message " + message.getMessageId() + " in local db. Timestamp = "
-                        + message.getReceivedTimeStamp());
-            }
+            LogUtil.v(TAG, "SendMessageAction: Updated " + (isSms ? "SMS" : "MMS")
+                    + " message " + message.getMessageId() + " in local db. Timestamp = "
+                    + message.getReceivedTimeStamp());
         } finally {
             db.endTransaction();
         }
@@ -432,8 +429,7 @@ public class SendMessageAction extends Action implements Parcelable {
         super(in);
     }
 
-    public static final Parcelable.Creator<SendMessageAction> CREATOR
-            = new Parcelable.Creator<SendMessageAction>() {
+    public static final Parcelable.Creator<SendMessageAction> CREATOR = new Parcelable.Creator<>() {
         @Override
         public SendMessageAction createFromParcel(final Parcel in) {
             return new SendMessageAction(in);
@@ -446,7 +442,7 @@ public class SendMessageAction extends Action implements Parcelable {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

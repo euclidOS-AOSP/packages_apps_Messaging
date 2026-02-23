@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +46,7 @@ public class AddContactsConfirmationDialog implements DialogInterface.OnClickLis
     public void show() {
         final int confirmAddContactStringId = R.string.add_contact_confirmation;
         final int cancelStringId = android.R.string.cancel;
-        final AlertDialog alertDialog = new AlertDialog.Builder(mContext)
+        final AlertDialog alertDialog = new AlertDialog.Builder(mContext, R.style.AlertDialogTheme)
         .setTitle(R.string.add_contact_confirmation_dialog_title)
         .setView(createBodyView())
         .setPositiveButton(confirmAddContactStringId, this)
@@ -55,11 +56,13 @@ public class AddContactsConfirmationDialog implements DialogInterface.OnClickLis
         final Resources resources = mContext.getResources();
         final Button cancelButton = alertDialog.getButton(DialogInterface.BUTTON_NEGATIVE);
         if (cancelButton != null) {
-            cancelButton.setTextColor(resources.getColor(R.color.contact_picker_button_text_color));
+            cancelButton.setTextColor(resources.getColor(R.color.contact_picker_button_text_color,
+                    mContext.getTheme()));
         }
         final Button addButton = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (addButton != null) {
-            addButton.setTextColor(resources.getColor(R.color.contact_picker_button_text_color));
+            addButton.setTextColor(resources.getColor(R.color.contact_picker_button_text_color,
+                    mContext.getTheme()));
         }
     }
 
@@ -71,9 +74,9 @@ public class AddContactsConfirmationDialog implements DialogInterface.OnClickLis
     private View createBodyView() {
         final View view = LayoutInflater.from(mContext).inflate(
                 R.layout.add_contacts_confirmation_dialog_body, null);
-        final ContactIconView iconView = (ContactIconView) view.findViewById(R.id.contact_icon);
+        final ContactIconView iconView = view.findViewById(R.id.contact_icon);
         iconView.setImageResourceUri(mAvatarUri);
-        final TextView textView = (TextView) view.findViewById(R.id.participant_name);
+        final TextView textView = view.findViewById(R.id.participant_name);
         textView.setText(mNormalizedDestination);
         // Accessibility reason : in case phone numbers are mixed in the display name,
         // we need to vocalize it for talkback.

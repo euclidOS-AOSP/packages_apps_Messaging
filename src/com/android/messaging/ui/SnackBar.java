@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +22,6 @@ import androidx.annotation.Nullable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup.MarginLayoutParams;
 import android.widget.FrameLayout;
 import android.widget.TextView;
@@ -32,6 +32,7 @@ import com.android.messaging.util.Assert;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class SnackBar {
     public static final int LONG_DURATION_IN_MS = 5000;
@@ -118,8 +119,7 @@ public class SnackBar {
     }
 
     public static class Builder {
-        private static final List<SnackBarInteraction> NO_INTERACTIONS = 
-            new ArrayList<SnackBarInteraction>();
+        private static final List<SnackBarInteraction> NO_INTERACTIONS = new ArrayList<>();
 
         private final Context mContext;
         private final SnackBarManager mSnackBarManager;
@@ -130,7 +130,7 @@ public class SnackBar {
         private Action mAction;
         private Placement mPlacement;
         // The parent view is only used to get a window token and doesn't affect the layout
-        private View mParentView;
+        private final View mParentView;
 
         public Builder(final SnackBarManager snackBarManager, final View parentView) {
             Assert.notNull(snackBarManager);
@@ -212,15 +212,11 @@ public class SnackBar {
         mAction = builder.mAction;
         mPlacement = builder.mPlacement;
         mParentView = builder.mParentView;
-        if (builder.mInteractions == null) {
-            mInteractions = new ArrayList<SnackBarInteraction>();
-        } else {
-            mInteractions = builder.mInteractions;
-        }
+        mInteractions = Objects.requireNonNullElseGet(builder.mInteractions, ArrayList::new);
 
-        mActionTextView = (TextView) mRootView.findViewById(R.id.snack_bar_action);
-        mMessageView = (TextView) mRootView.findViewById(R.id.snack_bar_message);
-        mMessageWrapper = (FrameLayout) mRootView.findViewById(R.id.snack_bar_message_wrapper);
+        mActionTextView = mRootView.findViewById(R.id.snack_bar_action);
+        mMessageView = mRootView.findViewById(R.id.snack_bar_message);
+        mMessageWrapper = mRootView.findViewById(R.id.snack_bar_message_wrapper);
 
         setUpButton();
         setUpTextLines();
@@ -291,13 +287,10 @@ public class SnackBar {
         } else {
             mActionTextView.setVisibility(View.VISIBLE);
             mActionTextView.setText(mAction.getActionLabel());
-            mActionTextView.setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(final View v) {
-                    mAction.getActionRunnable().run();
-                    if (mListener != null) {
-                        mListener.onActionClick();
-                    }
+            mActionTextView.setOnClickListener(v -> {
+                mAction.getActionRunnable().run();
+                if (mListener != null) {
+                    mListener.onActionClick();
                 }
             });
         }

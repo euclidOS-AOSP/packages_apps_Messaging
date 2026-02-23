@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007 Esmertec AG.
  * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +16,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms.pdu;
+package android.support.v7.mms.pdu;
 
 public class Base64 {
     /**
@@ -34,7 +35,7 @@ public class Base64 {
     static final int BASELENGTH = 255;
 
     // Create arrays to hold the base64 characters
-    private static byte[] base64Alphabet = new byte[BASELENGTH];
+    private static final byte[] base64Alphabet = new byte[BASELENGTH];
 
     // Populating the character arrays
     static {
@@ -71,13 +72,13 @@ public class Base64 {
         }
 
         int numberQuadruple = base64Data.length / FOURBYTE;
-        byte decodedData[] = null;
-        byte b1 = 0, b2 = 0, b3 = 0, b4 = 0, marker0 = 0, marker1 = 0;
+        byte[] decodedData;
+        byte b1, b2, b3, b4, marker0, marker1;
 
         // Throw away anything not in base64Data
 
         int encodedIndex = 0;
-        int dataIndex = 0;
+        int dataIndex;
         {
             // this sizes the output array properly - rlw
             int lastData = base64Data.length;
@@ -149,16 +150,16 @@ public class Base64 {
      * @return The data, less non-base64 characters (see RFC 2045).
      */
     static byte[] discardNonBase64(byte[] data) {
-        byte groomedData[] = new byte[data.length];
+        byte[] groomedData = new byte[data.length];
         int bytesCopied = 0;
 
-        for (int i = 0; i < data.length; i++) {
-            if (isBase64(data[i])) {
-                groomedData[bytesCopied++] = data[i];
+        for (byte datum : data) {
+            if (isBase64(datum)) {
+                groomedData[bytesCopied++] = datum;
             }
         }
 
-        byte packedData[] = new byte[bytesCopied];
+        byte[] packedData = new byte[bytesCopied];
 
         System.arraycopy(groomedData, 0, packedData, 0, bytesCopied);
 

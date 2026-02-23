@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +31,6 @@ import android.widget.ImageButton;
 import android.widget.ScrollView;
 
 import com.android.messaging.R;
-import com.android.messaging.annotation.VisibleForAnimation;
 import com.android.messaging.datamodel.data.DraftMessageData;
 import com.android.messaging.datamodel.data.MediaPickerMessagePartData;
 import com.android.messaging.datamodel.data.MessagePartData;
@@ -53,7 +53,7 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
     private int mAnimatedHeight = -1;
     private Animator mCloseGapAnimator;
     private boolean mPendingFirstUpdate;
-    private Handler mHandler;
+    private final Handler mHandler;
     private Runnable mHideRunnable;
     private boolean mPendingHideCanceled;
 
@@ -69,36 +69,23 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
-        mCloseButton = (ImageButton) findViewById(R.id.close_button);
-        mCloseButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(final View view) {
-                mComposeMessageView.clearAttachments();
-            }
-        });
+        mCloseButton = findViewById(R.id.close_button);
+        mCloseButton.setOnClickListener(view -> mComposeMessageView.clearAttachments());
 
-        mAttachmentView = (FrameLayout) findViewById(R.id.attachment_view);
+        mAttachmentView = findViewById(R.id.attachment_view);
 
         // The attachment preview is a scroll view so that it can show the bottom portion of the
         // attachment whenever the space is tight (e.g. when in landscape mode). Per design
         // request we'd like to make the attachment view always scrolled to the bottom.
-        addOnLayoutChangeListener(new OnLayoutChangeListener() {
-            @Override
-            public void onLayoutChange(final View v, final int left, final int top, final int right,
-                    final int bottom, final int oldLeft, final int oldTop, final int oldRight,
-                    final int oldBottom) {
-                post(new Runnable() {
-                    @Override
-                    public void run() {
-                        final int childCount = getChildCount();
-                        if (childCount > 0) {
-                            final View lastChild = getChildAt(childCount - 1);
-                            scrollTo(getScrollX(), lastChild.getBottom() - getHeight());
-                        }
-                    }
-                });
+        addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight,
+                                   oldBottom) -> post(() ->
+        {
+            final int childCount = getChildCount();
+            if (childCount > 0) {
+                final View lastChild = getChildAt(childCount - 1);
+                scrollTo(getScrollX(), lastChild.getBottom() - getHeight());
             }
-        });
+        }));
         mPendingFirstUpdate = true;
     }
 
@@ -128,18 +115,14 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
                 mPendingHideCanceled = false;
                 final View viewToHide = mAttachmentView.getChildCount() > 1 ?
                         mAttachmentView : mAttachmentView.getChildAt(0);
-                UiUtils.revealOrHideViewWithAnimation(viewToHide, INVISIBLE,
-                        new Runnable() {
-                            @Override
-                            public void run() {
-                                // Only hide if we are didn't get overruled by showing
-                                if (!mPendingHideCanceled) {
-                                    stopPopupAnimation();
-                                    mAttachmentView.removeAllViews();
-                                    setVisibility(GONE);
-                                }
-                            }
-                        });
+                UiUtils.revealOrHideViewWithAnimation(viewToHide, INVISIBLE, () -> {
+                    // Only hide if we are didn't get overruled by showing
+                    if (!mPendingHideCanceled) {
+                        stopPopupAnimation();
+                        mAttachmentView.removeAllViews();
+                        setVisibility(GONE);
+                    }
+                });
             } else {
                 mAttachmentView.removeAllViews();
                 setVisibility(GONE);
@@ -148,7 +131,7 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
     }
 
     // returns true if we have attachments
-    public boolean onAttachmentsChanged(final DraftMessageData draftMessageData) {
+    public void onAttachmentsChanged(final DraftMessageData draftMessageData) {
         final boolean isFirstUpdate = mPendingFirstUpdate;
         final List<MessagePartData> attachments = draftMessageData.getReadOnlyAttachments();
         final List<PendingAttachmentData> pendingAttachments =
@@ -163,14 +146,11 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
                 .getQuantityString(R.plurals.attachment_preview_close_content_description,
                         combinedAttachmentCount));
         if (combinedAttachmentCount == 0) {
-            mHideRunnable = new Runnable() {
-                @Override
-                public void run() {
-                    mHideRunnable = null;
-                    // Only start the hiding if there are still no attachments
-                    if (attachments.size() + pendingAttachments.size() == 0) {
-                        hideAttachmentPreview();
-                    }
+            mHideRunnable = () -> {
+                mHideRunnable = null;
+                // Only start the hiding if there are still no attachments
+                if (attachments.size() + pendingAttachments.size() == 0) {
+                    hideAttachmentPreview();
                 }
             };
             if (draftMessageData.isSending()) {
@@ -182,7 +162,7 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
                 // Run immediately when clearing attachments
                 mHideRunnable.run();
             }
-            return false;
+            return;
         }
 
         cancelPendingHide();  // We're showing
@@ -195,13 +175,11 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
             if (!isFirstUpdate) {
                 // Reveal the close button after the view animates in.
                 mCloseButton.setVisibility(INVISIBLE);
-                ThreadUtil.getMainThreadHandler().postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
+                ThreadUtil.getMainThreadHandler().postDelayed(() ->
                         UiUtils.revealOrHideViewWithAnimation(mCloseButton, VISIBLE,
-                                null /* onFinishRunnable */);
-                    }
-                }, UiUtils.MEDIAPICKER_TRANSITION_DURATION + CLOSE_BUTTON_REVEAL_STAGGER_MILLIS);
+                                null /* onFinishRunnable */),
+                        UiUtils.MEDIAPICKER_TRANSITION_DURATION +
+                                CLOSE_BUTTON_REVEAL_STAGGER_MILLIS);
             }
         }
 
@@ -269,7 +247,6 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
                 }
             }
         }
-        return true;
     }
 
     public void onMessageAnimationStart() {
@@ -299,7 +276,6 @@ public class AttachmentPreview extends ScrollView implements OnAttachmentClickLi
         }
     }
 
-    @VisibleForAnimation
     public void setAnimatedHeight(final int animatedHeight) {
         if (mAnimatedHeight != animatedHeight) {
             mAnimatedHeight = animatedHeight;

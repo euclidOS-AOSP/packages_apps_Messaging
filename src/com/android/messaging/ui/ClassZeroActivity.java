@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +20,11 @@ package com.android.messaging.ui;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ContentValues;
-import android.content.DialogInterface;
 import android.content.DialogInterface.OnClickListener;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
 import android.provider.Telephony.Sms;
@@ -31,8 +32,11 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Window;
 
+import androidx.annotation.NonNull;
+
 import com.android.messaging.R;
 import com.android.messaging.datamodel.action.ReceiveSmsMessageAction;
+import com.android.messaging.datamodel.BugleNotifications;
 import com.android.messaging.util.Assert;
 
 import java.util.ArrayList;
@@ -63,7 +67,7 @@ public class ClassZeroActivity extends Activity {
 
     private ArrayList<ContentValues> mMessageQueue = null;
 
-    private final Handler mHandler = new Handler() {
+    private final Handler mHandler = new Handler(Looper.getMainLooper()) {
         @Override
         public void handleMessage(final Message msg) {
             // Do not handle an invalid message.
@@ -78,7 +82,8 @@ public class ClassZeroActivity extends Activity {
 
     private boolean queueMsgFromIntent(final Intent msgIntent) {
         final ContentValues messageValues =
-                msgIntent.getParcelableExtra(UIIntents.UI_INTENT_EXTRA_MESSAGE_VALUES);
+                msgIntent.getParcelableExtra(UIIntents.UI_INTENT_EXTRA_MESSAGE_VALUES,
+                        ContentValues.class);
         // that takes the format argument is a hidden API right now.
         final String message = messageValues.getAsString(Sms.BODY);
         if (TextUtils.isEmpty(message)) {
@@ -88,6 +93,8 @@ public class ClassZeroActivity extends Activity {
             return false;
         }
         mMessageQueue.add(messageValues);
+        // Show a notification to let the user know a new message has arrived
+        BugleNotifications.playClassZeroNotification();
         return true;
     }
 
@@ -114,7 +121,7 @@ public class ClassZeroActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
 
         if (mMessageQueue == null) {
-            mMessageQueue = new ArrayList<ContentValues>();
+            mMessageQueue = new ArrayList<>();
         }
         if (!queueMsgFromIntent(getIntent())) {
             return;
@@ -159,19 +166,17 @@ public class ClassZeroActivity extends Activity {
         } else {
             mHandler.sendEmptyMessageAtTime(ON_AUTO_SAVE, mTimerSet);
             if (VERBOSE) {
-                Log.d(TAG, "onRestart time = " + Long.toString(mTimerSet) + " "
-                        + this.toString());
+                Log.d(TAG, "onRestart time = " + mTimerSet + " " + this);
             }
         }
     }
 
     @Override
-    protected void onSaveInstanceState(final Bundle outState) {
+    protected void onSaveInstanceState(@NonNull final Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putLong(TIMER_FIRE, mTimerSet);
         if (VERBOSE) {
-            Log.d(TAG, "onSaveInstanceState time = " + Long.toString(mTimerSet)
-                    + " " + this.toString());
+            Log.d(TAG, "onSaveInstanceState time = " + mTimerSet + " " + this);
         }
     }
 
@@ -180,26 +185,19 @@ public class ClassZeroActivity extends Activity {
         super.onStop();
         mHandler.removeMessages(ON_AUTO_SAVE);
         if (VERBOSE) {
-            Log.d(TAG, "onStop time = " + Long.toString(mTimerSet)
-                    + " " + this.toString());
+            Log.d(TAG, "onStop time = " + mTimerSet + " " + this);
         }
     }
 
-    private final OnClickListener mCancelListener = new OnClickListener() {
-        @Override
-        public void onClick(final DialogInterface dialog, final int whichButton) {
-            dialog.dismiss();
-            processNextMessage();
-        }
+    private final OnClickListener mCancelListener = (dialog, whichButton) -> {
+        dialog.dismiss();
+        processNextMessage();
     };
 
-    private final OnClickListener mSaveListener = new OnClickListener() {
-        @Override
-        public void onClick(final DialogInterface dialog, final int whichButton) {
-            mRead = true;
-            saveMessage();
-            dialog.dismiss();
-            processNextMessage();
-        }
+    private final OnClickListener mSaveListener = (dialog, whichButton) -> {
+        mRead = true;
+        saveMessage();
+        dialog.dismiss();
+        processNextMessage();
     };
 }

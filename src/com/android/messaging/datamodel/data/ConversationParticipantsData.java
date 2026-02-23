@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +18,11 @@
 package com.android.messaging.datamodel.data;
 
 import android.database.Cursor;
+
+import androidx.annotation.NonNull;
 import androidx.collection.SimpleArrayMap;
 
 import com.android.messaging.util.Assert;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -39,7 +40,7 @@ public class ConversationParticipantsData implements Iterable<ParticipantData> {
     private int mParticipantCountExcludingSelf = 0;
 
     public ConversationParticipantsData() {
-        mConversationParticipantsMap = new SimpleArrayMap<String, ParticipantData>();
+        mConversationParticipantsMap = new SimpleArrayMap<>();
     }
 
     public void bind(final Cursor cursor) {
@@ -56,14 +57,9 @@ public class ConversationParticipantsData implements Iterable<ParticipantData> {
         }
     }
 
-    @VisibleForTesting
-    ParticipantData getParticipantById(final String participantId) {
-        return mConversationParticipantsMap.get(participantId);
-    }
-
     ArrayList<ParticipantData> getParticipantListExcludingSelf() {
         final ArrayList<ParticipantData> retList =
-                new ArrayList<ParticipantData>(mConversationParticipantsMap.size());
+                new ArrayList<>(mConversationParticipantsMap.size());
         for (int i = 0; i < mConversationParticipantsMap.size(); i++) {
             final ParticipantData participant = mConversationParticipantsMap.valueAt(i);
             if (!participant.isSelf()) {
@@ -97,9 +93,10 @@ public class ConversationParticipantsData implements Iterable<ParticipantData> {
         return !mConversationParticipantsMap.isEmpty();
     }
 
+    @NonNull
     @Override
     public Iterator<ParticipantData> iterator() {
-        return new Iterator<ParticipantData>() {
+        return new Iterator<>() {
             private int mCurrentIndex = -1;
 
             @Override

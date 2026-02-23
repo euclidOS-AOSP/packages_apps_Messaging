@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +17,21 @@
 
 package com.android.messaging.ui.appsettings;
 
-import android.app.Fragment;
 import android.content.Context;
 import android.os.Bundle;
-import androidx.core.app.NavUtils;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.NavUtils;
+import androidx.fragment.app.Fragment;
+import androidx.loader.app.LoaderManager;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.DataModel;
@@ -64,16 +67,15 @@ public class SettingsActivity extends BugleActionBarActivity {
             UIIntents.get().launchApplicationSettingsActivity(this, true /* topLevel */);
             finish();
         } else {
-            getFragmentManager().beginTransaction()
+            getSupportFragmentManager().beginTransaction()
                     .replace(android.R.id.content, new SettingsFragment())
                     .commit();
         }
     }
 
     @Override
-    public boolean onOptionsItemSelected(final MenuItem item) {
-        switch (item.getItemId()) {
-        case android.R.id.home:
+    public boolean onOptionsItemSelected(@NonNull final MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
             NavUtils.navigateUpFromSameTask(this);
             return true;
         }
@@ -89,14 +91,14 @@ public class SettingsActivity extends BugleActionBarActivity {
         public void onCreate(final Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             mBinding.bind(DataModel.get().createSettingsData(getActivity(), this));
-            mBinding.getData().init(getLoaderManager(), mBinding);
+            mBinding.getData().init(LoaderManager.getInstance(this), mBinding);
         }
 
         @Override
         public View onCreateView(final LayoutInflater inflater, final ViewGroup container,
                 final Bundle savedInstanceState) {
             final View view = inflater.inflate(R.layout.settings_fragment, container, false);
-            mListView = (ListView) view.findViewById(android.R.id.list);
+            mListView = view.findViewById(android.R.id.list);
             mAdapter = new SettingsListAdapter(getActivity());
             mListView.setAdapter(mAdapter);
             return view;
@@ -119,7 +121,7 @@ public class SettingsActivity extends BugleActionBarActivity {
          */
         private class SettingsListAdapter extends ArrayAdapter<SettingsItem> {
             public SettingsListAdapter(final Context context) {
-                super(context, R.layout.settings_item_view, new ArrayList<SettingsItem>());
+                super(context, R.layout.settings_item_view, new ArrayList<>());
             }
 
             public void setSettingsItems(final List<SettingsItem> newList) {
@@ -128,9 +130,10 @@ public class SettingsActivity extends BugleActionBarActivity {
                 notifyDataSetChanged();
             }
 
+            @NonNull
             @Override
             public View getView(final int position, final View convertView,
-                    final ViewGroup parent) {
+                                @NonNull final ViewGroup parent) {
                 View itemView;
                 if (convertView != null) {
                     itemView = convertView;
@@ -141,8 +144,8 @@ public class SettingsActivity extends BugleActionBarActivity {
                             R.layout.settings_item_view, parent, false);
                 }
                 final SettingsItem item = getItem(position);
-                final TextView titleTextView = (TextView) itemView.findViewById(R.id.title);
-                final TextView subtitleTextView = (TextView) itemView.findViewById(R.id.subtitle);
+                final TextView titleTextView = itemView.findViewById(R.id.title);
+                final TextView subtitleTextView = itemView.findViewById(R.id.subtitle);
                 final String summaryText = item.getDisplayDetail();
                 titleTextView.setText(item.getDisplayName());
                 if (!TextUtils.isEmpty(summaryText)) {
@@ -151,24 +154,21 @@ public class SettingsActivity extends BugleActionBarActivity {
                 } else {
                     subtitleTextView.setVisibility(View.GONE);
                 }
-                itemView.setOnClickListener(new OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        switch (item.getType()) {
-                            case SettingsItem.TYPE_GENERAL_SETTINGS:
-                                UIIntents.get().launchApplicationSettingsActivity(getActivity(),
-                                        false /* topLevel */);
-                                break;
+                itemView.setOnClickListener(view -> {
+                    switch (item.getType()) {
+                        case SettingsItem.TYPE_GENERAL_SETTINGS:
+                            UIIntents.get().launchApplicationSettingsActivity(getActivity(),
+                                    false /* topLevel */);
+                            break;
 
-                            case SettingsItem.TYPE_PER_SUBSCRIPTION_SETTINGS:
-                                UIIntents.get().launchPerSubscriptionSettingsActivity(getActivity(),
-                                        item.getSubId(), item.getActivityTitle());
-                                break;
+                        case SettingsItem.TYPE_PER_SUBSCRIPTION_SETTINGS:
+                            UIIntents.get().launchPerSubscriptionSettingsActivity(getActivity(),
+                                    item.getSubId(), item.getActivityTitle());
+                            break;
 
-                            default:
-                                Assert.fail("unrecognized setting type!");
-                                break;
-                        }
+                        default:
+                            Assert.fail("unrecognized setting type!");
+                            break;
                     }
                 });
                 return itemView;

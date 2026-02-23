@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +24,11 @@ import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteStatement;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
+import android.support.v7.mms.pdu.ContentType;
+import android.text.TextUtils;
+
 import androidx.collection.ArrayMap;
 import androidx.collection.SimpleArrayMap;
-import android.text.TextUtils;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.DatabaseHelper.ConversationColumns;
@@ -43,18 +46,16 @@ import com.android.messaging.ui.UIIntents;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.Assert.DoesNotRunOnMainThread;
 import com.android.messaging.util.AvatarUriUtil;
-import com.android.messaging.util.ContentType;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.util.UriUtil;
 import com.android.messaging.widget.WidgetConversationProvider;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 
@@ -67,7 +68,7 @@ public class BugleDatabaseOperations {
 
     // Global cache of phone numbers -> participant id mapping since this call is expensive.
     private static final ArrayMap<String, String> sNormalizedPhoneNumberToParticipantIdCache =
-            new ArrayMap<String, String>();
+            new ArrayMap<>();
 
     /**
      * Convert list of recipient strings (email/phone number) into list of ConversationParticipants
@@ -78,8 +79,7 @@ public class BugleDatabaseOperations {
     static ArrayList<ParticipantData> getConversationParticipantsFromRecipients(
             final List<String> recipients, final int refSubId) {
         // Generate a list of partially formed participants
-        final ArrayList<ParticipantData> participants = new
-                ArrayList<ParticipantData>();
+        final ArrayList<ParticipantData> participants = new ArrayList<>();
 
         if (recipients != null) {
             for (final String recipient : recipients) {
@@ -98,7 +98,7 @@ public class BugleDatabaseOperations {
         Assert.isNotMainThread();
         if (participants.size() > 0) {
             // First remove redundant phone numbers
-            final HashSet<String> recipients = new HashSet<String>();
+            final HashSet<String> recipients = new HashSet<>();
             for (int i = participants.size() - 1; i >= 0; i--) {
                 final String recipient = participants.get(i).getNormalizedDestination();
                 if (!recipients.contains(recipient)) {
@@ -141,7 +141,7 @@ public class BugleDatabaseOperations {
             final List<ParticipantData> participants) {
         Assert.isNotMainThread();
         // First find the thread id for this list of participants.
-        final ArrayList<String> recipients = new ArrayList<String>();
+        final ArrayList<String> recipients = new ArrayList<>();
 
         for (final ParticipantData participant : participants) {
             recipients.add(participant.getSendDestination());
@@ -171,8 +171,7 @@ public class BugleDatabaseOperations {
         final ArrayList<ParticipantData> participants =
                 getConversationParticipantsFromRecipients(recipients, refSubId);
 
-        return getOrCreateConversation(db, threadId, senderBlocked, participants, false, false,
-                null);
+        return getOrCreateConversation(db, threadId, senderBlocked, participants);
     }
 
     /**
@@ -190,7 +189,7 @@ public class BugleDatabaseOperations {
         Assert.isNotMainThread();
         final ArrayList<ParticipantData> recipients = new ArrayList<>(1);
         recipients.add(recipient);
-        return getOrCreateConversation(db, threadId, senderBlocked, recipients, false, false, null);
+        return getOrCreateConversation(db, threadId, senderBlocked, recipients);
     }
 
     /**
@@ -200,15 +199,11 @@ public class BugleDatabaseOperations {
      * @param threadId The message's thread
      * @param archived Flag whether the conversation should be created archived
      * @param participants list of conversation participants
-     * @param noNotification If notification should be disabled
-     * @param noVibrate If vibrate on notification should be disabled
-     * @param soundUri If there is custom sound URI
      * @return a conversation id
      */
     @DoesNotRunOnMainThread
     public static String getOrCreateConversation(final DatabaseWrapper db, final long threadId,
-            final boolean archived, final ArrayList<ParticipantData> participants,
-            boolean noNotification, boolean noVibrate, String soundUri) {
+            final boolean archived, final ArrayList<ParticipantData> participants) {
         Assert.isNotMainThread();
 
         // Check to see if this conversation is already in out local db cache
@@ -231,8 +226,7 @@ public class BugleDatabaseOperations {
                         BugleDatabaseOperations.getOrCreateParticipantInTransaction(db, self);
                 // Create a new conversation
                 conversationId = BugleDatabaseOperations.createConversationInTransaction(
-                        db, threadId, conversationName, selfId, participants, archived,
-                        noNotification, noVibrate, soundUri);
+                        db, threadId, conversationName, selfId, participants, archived);
                 db.setTransactionSuccessful();
             } finally {
                 db.endTransaction();
@@ -250,28 +244,21 @@ public class BugleDatabaseOperations {
      * @param senderBlocked Flag whether sender of message is in blocked people list
      * @return The existing conversation id or null
      */
-    @VisibleForTesting
     @DoesNotRunOnMainThread
     public static String getExistingConversation(final DatabaseWrapper dbWrapper,
             final long threadId, final boolean senderBlocked) {
         Assert.isNotMainThread();
         String conversationId = null;
 
-        Cursor cursor = null;
-        try {
+        try (Cursor cursor = dbWrapper.rawQuery("SELECT " + ConversationColumns._ID
+                        + " FROM " + DatabaseHelper.CONVERSATIONS_TABLE
+                        + " WHERE " + ConversationColumns.SMS_THREAD_ID + "=" + threadId,
+                null)) {
             // Look for an existing conversation in the db with this thread id
-            cursor = dbWrapper.rawQuery("SELECT " + ConversationColumns._ID
-                            + " FROM " + DatabaseHelper.CONVERSATIONS_TABLE
-                            + " WHERE " + ConversationColumns.SMS_THREAD_ID + "=" + threadId,
-                    null);
 
             if (cursor.moveToFirst()) {
                 Assert.isTrue(cursor.getCount() == 1);
                 conversationId = cursor.getString(0);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -291,23 +278,17 @@ public class BugleDatabaseOperations {
         Assert.isNotMainThread();
         long threadId = -1;
 
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
-                    new String[] { ConversationColumns.SMS_THREAD_ID },
-                    ConversationColumns._ID + " =?",
-                    new String[] { conversationId },
-                    null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
+                new String[]{ConversationColumns.SMS_THREAD_ID},
+                ConversationColumns._ID + " =?",
+                new String[]{conversationId},
+                null, null, null)) {
 
             if (cursor.moveToFirst()) {
                 Assert.isTrue(cursor.getCount() == 1);
                 if (!cursor.isNull(0)) {
                     threadId = cursor.getLong(0);
                 }
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -326,22 +307,16 @@ public class BugleDatabaseOperations {
 
     static boolean isBlockedParticipant(final DatabaseWrapper db, final String value,
             final String column) {
-        Cursor cursor = null;
-        try {
-            cursor = db.query(DatabaseHelper.PARTICIPANTS_TABLE,
-                    new String[] { ParticipantColumns.BLOCKED },
-                    column + "=? AND " + ParticipantColumns.SUB_ID + "=?",
-                    new String[] { value,
-                    Integer.toString(ParticipantData.OTHER_THAN_SELF_SUB_ID) },
-                    null, null, null);
+        try (Cursor cursor = db.query(DatabaseHelper.PARTICIPANTS_TABLE,
+                new String[]{ParticipantColumns.BLOCKED},
+                column + "=? AND " + ParticipantColumns.SUB_ID + "=?",
+                new String[]{value,
+                        Integer.toString(ParticipantData.OTHER_THAN_SELF_SUB_ID)},
+                null, null, null)) {
 
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 return cursor.getInt(0) == 1;
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
         return false;  // if there's no row, it's not blocked :-)
@@ -357,15 +332,11 @@ public class BugleDatabaseOperations {
      * @param threadId      The message's thread
      * @param selfId        The selfId to make default for this conversation
      * @param archived      Flag whether the conversation should be created archived
-     * @param noNotification If notification should be disabled
-     * @param noVibrate     If vibrate on notification should be disabled
-     * @param soundUri      The customized sound
      * @return The existing conversation id or new conversation id
      */
     static String createConversationInTransaction(final DatabaseWrapper dbWrapper,
             final long threadId, final String conversationName, final String selfId,
-            final List<ParticipantData> participants, final boolean archived,
-            boolean noNotification, boolean noVibrate, String soundUri) {
+            final List<ParticipantData> participants, final boolean archived) {
         // We want conversation and participant creation to be atomic
         Assert.isTrue(dbWrapper.getDatabase().inTransaction());
         boolean hasEmailAddress = false;
@@ -388,15 +359,6 @@ public class BugleDatabaseOperations {
         values.put(ConversationColumns.INCLUDE_EMAIL_ADDRESS, (hasEmailAddress ? 1 : 0));
         if (archived) {
             values.put(ConversationColumns.ARCHIVE_STATUS, 1);
-        }
-        if (noNotification) {
-            values.put(ConversationColumns.NOTIFICATION_ENABLED, 0);
-        }
-        if (noVibrate) {
-            values.put(ConversationColumns.NOTIFICATION_VIBRATION, 0);
-        }
-        if (!TextUtils.isEmpty(soundUri)) {
-            values.put(ConversationColumns.NOTIFICATION_SOUND_URI, soundUri);
         }
 
         fillParticipantData(values, participants);
@@ -471,7 +433,7 @@ public class BugleDatabaseOperations {
         Assert.isNotMainThread();
         dbWrapper.beginTransaction();
         boolean conversationDeleted = false;
-        boolean conversationMessagesDeleted = false;
+        boolean conversationMessagesDeleted;
         try {
             // Delete existing messages
             if (cutoffTimestamp == Long.MAX_VALUE) {
@@ -543,12 +505,10 @@ public class BugleDatabaseOperations {
                 new String[]{ conversationId },
                 null, null, null);
         if (cursor != null) {
-            try {
+            try (cursor) {
                 if (cursor.moveToFirst()) {
                     return cursor.getLong(0);
                 }
-            } finally {
-                cursor.close();
             }
         }
         return 0;
@@ -586,7 +546,7 @@ public class BugleDatabaseOperations {
         // reading and if necessary creating the conversation.
         updateConversationRow(dbWrapper, conversationId, values);
 
-        if (shouldAutoSwitchSelfId && OsUtil.isAtLeastL_MR1()) {
+        if (shouldAutoSwitchSelfId) {
             // Normally, the draft message compose UI trusts its UI state for providing up-to-date
             // conversation self id. Therefore, notify UI through local broadcast receiver about
             // this external change so the change can be properly reflected.
@@ -643,7 +603,7 @@ public class BugleDatabaseOperations {
     static boolean addSelfIdAutoSwitchInfoToContentValues(final DatabaseWrapper dbWrapper,
             final MessageData message, final String conversationId, final ContentValues values) {
         // Only auto switch conversation self for incoming messages.
-        if (!OsUtil.isAtLeastL_MR1() || !message.getIsIncoming()) {
+        if (!message.getIsIncoming()) {
             return false;
         }
 
@@ -694,20 +654,14 @@ public class BugleDatabaseOperations {
         // Make sure the selfId passed in is valid and active.
         final String selection = ParticipantColumns._ID + "=? AND " +
                 ParticipantColumns.SIM_SLOT_ID + "<>?";
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
-                    new String[] { ParticipantColumns._ID }, selection,
-                    new String[] { selfId, String.valueOf(ParticipantData.INVALID_SLOT_ID) },
-                    null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
+                new String[]{ParticipantColumns._ID}, selection,
+                new String[]{selfId, String.valueOf(ParticipantData.INVALID_SLOT_ID)},
+                null, null, null)) {
 
             if (cursor != null && cursor.getCount() > 0) {
                 values.put(ConversationColumns.CURRENT_SELF_ID, selfId);
                 return true;
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
         return false;
@@ -719,21 +673,16 @@ public class BugleDatabaseOperations {
         Assert.isTrue(dbWrapper.getDatabase().inTransaction());
 
         long sortTimestamp = 0L;
-        Cursor cursor = null;
-        try {
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
+                REFRESH_CONVERSATION_MESSAGE_PROJECTION,
+                MessageColumns.CONVERSATION_ID + "=?",
+                new String[]{conversationId}, null, null,
+                MessageColumns.RECEIVED_TIMESTAMP + " DESC", "1" /* limit */)) {
             // Check to find the latest message in the conversation
-            cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
-                    REFRESH_CONVERSATION_MESSAGE_PROJECTION,
-                    MessageColumns.CONVERSATION_ID + "=?",
-                    new String[]{conversationId}, null, null,
-                    MessageColumns.RECEIVED_TIMESTAMP + " DESC", "1" /* limit */);
+            /* limit */
 
             if (cursor.moveToFirst()) {
                 sortTimestamp = cursor.getLong(1);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -873,34 +822,17 @@ public class BugleDatabaseOperations {
     public static String getConversationSelfId(final DatabaseWrapper dbWrapper,
             final String conversationId) {
         Assert.isNotMainThread();
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
-                    new String[] { ConversationColumns.CURRENT_SELF_ID },
-                    ConversationColumns._ID + "=?",
-                    new String[] { conversationId },
-                    null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
+                new String[]{ConversationColumns.CURRENT_SELF_ID},
+                ConversationColumns._ID + "=?",
+                new String[]{conversationId},
+                null, null, null)) {
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 return cursor.getString(0);
             }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
         }
         return null;
-    }
-
-    /**
-     * Frees up memory associated with phone number to participant id matching.
-     */
-    @DoesNotRunOnMainThread
-    public static void clearParticipantIdCache() {
-        Assert.isNotMainThread();
-        synchronized (sNormalizedPhoneNumberToParticipantIdCache) {
-            sNormalizedPhoneNumberToParticipantIdCache.clear();
-        }
     }
 
     @DoesNotRunOnMainThread
@@ -910,7 +842,7 @@ public class BugleDatabaseOperations {
         final ArrayList<ParticipantData> participants =
                 getParticipantsForConversation(dbWrapper, conversationId);
 
-        final ArrayList<String> recipients = new ArrayList<String>();
+        final ArrayList<String> recipients = new ArrayList<>();
         for (final ParticipantData participant : participants) {
             recipients.add(participant.getSendDestination());
         }
@@ -922,20 +854,14 @@ public class BugleDatabaseOperations {
     public static String getSmsServiceCenterForConversation(final DatabaseWrapper dbWrapper,
             final String conversationId) {
         Assert.isNotMainThread();
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
-                    new String[] { ConversationColumns.SMS_SERVICE_CENTER },
-                    ConversationColumns._ID + "=?",
-                    new String[] { conversationId },
-                    null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
+                new String[]{ConversationColumns.SMS_SERVICE_CENTER},
+                ConversationColumns._ID + "=?",
+                new String[]{conversationId},
+                null, null, null)) {
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 return cursor.getString(0);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
         return null;
@@ -946,19 +872,13 @@ public class BugleDatabaseOperations {
             final String participantId) {
         Assert.isNotMainThread();
         ParticipantData participant = null;
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
-                    ParticipantData.ParticipantsQuery.PROJECTION,
-                    ParticipantColumns._ID + " =?",
-                    new String[] { participantId }, null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
+                ParticipantData.ParticipantsQuery.PROJECTION,
+                ParticipantColumns._ID + " =?",
+                new String[]{participantId}, null, null, null)) {
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 participant = ParticipantData.getFromCursor(cursor);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -976,30 +896,22 @@ public class BugleDatabaseOperations {
         return ParticipantData.DEFAULT_SELF_SUB_ID;
     }
 
-    @VisibleForTesting
     @DoesNotRunOnMainThread
     public static ArrayList<ParticipantData> getParticipantsForConversation(
             final DatabaseWrapper dbWrapper, final String conversationId) {
         Assert.isNotMainThread();
-        final ArrayList<ParticipantData> participants =
-                new ArrayList<ParticipantData>();
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
-                    ParticipantData.ParticipantsQuery.PROJECTION,
-                    ParticipantColumns._ID + " IN ( " + "SELECT "
-                            + ConversationParticipantsColumns.PARTICIPANT_ID + " AS "
-                            + ParticipantColumns._ID
-                            + " FROM " + DatabaseHelper.CONVERSATION_PARTICIPANTS_TABLE
-                            + " WHERE " + ConversationParticipantsColumns.CONVERSATION_ID + " =? )",
-                            new String[] { conversationId }, null, null, null);
+        final ArrayList<ParticipantData> participants = new ArrayList<>();
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
+                ParticipantData.ParticipantsQuery.PROJECTION,
+                ParticipantColumns._ID + " IN ( " + "SELECT "
+                        + ConversationParticipantsColumns.PARTICIPANT_ID + " AS "
+                        + ParticipantColumns._ID
+                        + " FROM " + DatabaseHelper.CONVERSATION_PARTICIPANTS_TABLE
+                        + " WHERE " + ConversationParticipantsColumns.CONVERSATION_ID + " =? )",
+                new String[]{conversationId}, null, null, null)) {
 
             while (cursor.moveToNext()) {
                 participants.add(ParticipantData.getFromCursor(cursor));
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -1016,45 +928,18 @@ public class BugleDatabaseOperations {
         return message;
     }
 
-    @VisibleForTesting
-    static MessagePartData readMessagePartData(final DatabaseWrapper dbWrapper,
-            final String partId) {
-        MessagePartData messagePartData = null;
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.PARTS_TABLE,
-                    MessagePartData.getProjection(), PartColumns._ID + "=?",
-                    new String[] { partId }, null, null, null);
-            Assert.inRange(cursor.getCount(), 0, 1);
-            if (cursor.moveToFirst()) {
-                messagePartData = MessagePartData.createFromCursor(cursor);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-        return messagePartData;
-    }
-
     @DoesNotRunOnMainThread
     public static MessageData readMessageData(final DatabaseWrapper dbWrapper,
             final Uri smsMessageUri) {
         Assert.isNotMainThread();
         MessageData message = null;
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
-                    MessageData.getProjection(), MessageColumns.SMS_MESSAGE_URI + "=?",
-                    new String[] { smsMessageUri.toString() }, null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
+                MessageData.getProjection(), MessageColumns.SMS_MESSAGE_URI + "=?",
+                new String[]{smsMessageUri.toString()}, null, null, null)) {
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 message = new MessageData();
                 message.bind(cursor);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
         return message;
@@ -1065,19 +950,13 @@ public class BugleDatabaseOperations {
             final String messageId) {
         Assert.isNotMainThread();
         MessageData message = null;
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
-                    MessageData.getProjection(), MessageColumns._ID + "=?",
-                    new String[] { messageId }, null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
+                MessageData.getProjection(), MessageColumns._ID + "=?",
+                new String[]{messageId}, null, null, null)) {
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 message = new MessageData();
                 message.bind(cursor);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
         return message;
@@ -1093,11 +972,9 @@ public class BugleDatabaseOperations {
             final MessageData message, final boolean checkAttachmentFilesExist) {
         final ContentResolver contentResolver =
                 Factory.get().getApplicationContext().getContentResolver();
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.PARTS_TABLE,
-                    MessagePartData.getProjection(), PartColumns.MESSAGE_ID + "=?",
-                    new String[] { message.getMessageId() }, null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.PARTS_TABLE,
+                MessagePartData.getProjection(), PartColumns.MESSAGE_ID + "=?",
+                new String[]{message.getMessageId()}, null, null, null)) {
             while (cursor.moveToNext()) {
                 final MessagePartData messagePartData = MessagePartData.createFromCursor(cursor);
                 if (checkAttachmentFilesExist && messagePartData.isAttachment() &&
@@ -1122,10 +999,6 @@ public class BugleDatabaseOperations {
                 } else {
                     message.addPart(messagePartData);
                 }
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
     }
@@ -1281,30 +1154,25 @@ public class BugleDatabaseOperations {
             final String conversationId) {
         Assert.isNotMainThread();
         Assert.isTrue(dbWrapper.getDatabase().inTransaction());
-        Cursor cursor = null;
-        try {
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
+                REFRESH_CONVERSATION_MESSAGE_PROJECTION,
+                MessageColumns.CONVERSATION_ID + "=? AND " +
+                        MessageColumns.STATUS + "!=" + MessageData.BUGLE_STATUS_OUTGOING_DRAFT,
+                new String[]{conversationId}, null, null,
+                MessageColumns.RECEIVED_TIMESTAMP + " DESC", "1" /* limit */)) {
             // TODO: The refreshConversationMetadataInTransaction method below uses this
             // same query; maybe they should share this logic?
 
             // Check to see if there are any (non-draft) messages in the conversation
-            cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
-                    REFRESH_CONVERSATION_MESSAGE_PROJECTION,
-                    MessageColumns.CONVERSATION_ID + "=? AND " +
-                    MessageColumns.STATUS + "!=" + MessageData.BUGLE_STATUS_OUTGOING_DRAFT,
-                    new String[] { conversationId }, null, null,
-                    MessageColumns.RECEIVED_TIMESTAMP + " DESC", "1" /* limit */);
+            /* limit */
             if (cursor.getCount() == 0) {
                 dbWrapper.delete(DatabaseHelper.CONVERSATIONS_TABLE,
-                        ConversationColumns._ID + "=?", new String[] { conversationId });
+                        ConversationColumns._ID + "=?", new String[]{conversationId});
                 LogUtil.i(TAG,
                         "BugleDatabaseOperations: Deleted empty conversation " + conversationId);
                 return true;
             } else {
                 return false;
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
     }
@@ -1325,15 +1193,14 @@ public class BugleDatabaseOperations {
             boolean keepArchived) {
         Assert.isNotMainThread();
         Assert.isTrue(dbWrapper.getDatabase().inTransaction());
-        Cursor cursor = null;
-        try {
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
+                REFRESH_CONVERSATION_MESSAGE_PROJECTION,
+                MessageColumns.CONVERSATION_ID + "=? AND " +
+                        MessageColumns.STATUS + "!=" + MessageData.BUGLE_STATUS_OUTGOING_DRAFT,
+                new String[]{conversationId}, null, null,
+                MessageColumns.RECEIVED_TIMESTAMP + " DESC", "1" /* limit */)) {
             // Check to see if there are any (non-draft) messages in the conversation
-            cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
-                    REFRESH_CONVERSATION_MESSAGE_PROJECTION,
-                    MessageColumns.CONVERSATION_ID + "=? AND " +
-                    MessageColumns.STATUS + "!=" + MessageData.BUGLE_STATUS_OUTGOING_DRAFT,
-                    new String[] { conversationId }, null, null,
-                    MessageColumns.RECEIVED_TIMESTAMP + " DESC", "1" /* limit */);
+            /* limit */
 
             if (cursor.moveToFirst()) {
                 // Refresh latest message in conversation
@@ -1344,10 +1211,6 @@ public class BugleDatabaseOperations {
                 updateConversationMetadataInTransaction(dbWrapper, conversationId,
                         latestMessageId, latestMessageTimestamp, senderBlocked || keepArchived,
                         shouldAutoSwitchSelfId);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
     }
@@ -1370,20 +1233,14 @@ public class BugleDatabaseOperations {
         if (!TextUtils.isEmpty(messageId)) {
             refresh = false;
             // Look for an existing conversation in the db with this conversation id
-            Cursor cursor = null;
-            try {
-                cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
-                        new String[] { ConversationColumns.LATEST_MESSAGE_ID },
-                        ConversationColumns._ID + "=?",
-                        new String[] { conversationId },
-                        null, null, null);
+            try (Cursor cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
+                    new String[]{ConversationColumns.LATEST_MESSAGE_ID},
+                    ConversationColumns._ID + "=?",
+                    new String[]{conversationId},
+                    null, null, null)) {
                 Assert.inRange(cursor.getCount(), 0, 1);
                 if (cursor.moveToFirst()) {
                     refresh = TextUtils.equals(cursor.getString(0), messageId);
-                }
-            } finally {
-                if (cursor != null) {
-                    cursor.close();
                 }
             }
         }
@@ -1476,18 +1333,13 @@ public class BugleDatabaseOperations {
     static boolean getConversationExists(final DatabaseWrapper dbWrapper,
             final String conversationId) {
         // Look for an existing conversation in the db with this conversation id
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
-                    new String[] { /* No projection */},
-                    ConversationColumns._ID + "=?",
-                    new String[] { conversationId },
-                    null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.CONVERSATIONS_TABLE,
+                new String[]{ /* No projection */},
+                ConversationColumns._ID + "=?",
+                new String[]{conversationId},
+                null, null, null)) {
+            /* No projection */
             return cursor.getCount() == 1;
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
         }
     }
 
@@ -1581,10 +1433,8 @@ public class BugleDatabaseOperations {
                 cursor.close();
             }
         }
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG,
-                    "Updated draft message " + messageId + " for conversation " + conversationId);
-        }
+        LogUtil.v(TAG, "Updated draft message " + messageId + " for conversation "
+                + conversationId);
         return messageId;
     }
 
@@ -1597,16 +1447,14 @@ public class BugleDatabaseOperations {
             final String conversationId, final String conversationSelfId) {
         Assert.isNotMainThread();
         MessageData message = null;
-        Cursor cursor = null;
         dbWrapper.beginTransaction();
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
-                    MessageData.getProjection(),
-                    MessageColumns.STATUS + "=? AND " + MessageColumns.CONVERSATION_ID + "=?",
-                    new String[] {
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.MESSAGES_TABLE,
+                MessageData.getProjection(),
+                MessageColumns.STATUS + "=? AND " + MessageColumns.CONVERSATION_ID + "=?",
+                new String[]{
                         Integer.toString(MessageData.BUGLE_STATUS_OUTGOING_DRAFT),
                         conversationId
-                    }, null, null, null);
+                }, null, null, null)) {
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 message = new MessageData();
@@ -1622,9 +1470,6 @@ public class BugleDatabaseOperations {
             dbWrapper.setTransactionSuccessful();
         } finally {
             dbWrapper.endTransaction();
-            if (cursor != null) {
-                cursor.close();
-            }
         }
         return message;
     }
@@ -1655,7 +1500,6 @@ public class BugleDatabaseOperations {
      * @return If the participant is available in our cache, or the DB, this returns the
      * participant id for the given subid/phone number.  Otherwise it returns null.
      */
-    @VisibleForTesting
     private static String getParticipantId(final DatabaseWrapper dbWrapper,
             final int subId, final String canonicalRecipient) {
         // First check our memory cache for the participant Id
@@ -1712,7 +1556,7 @@ public class BugleDatabaseOperations {
     public static ParticipantData getOrCreateSelf(final DatabaseWrapper dbWrapper,
             final int subId) {
         Assert.isNotMainThread();
-        ParticipantData participant = null;
+        ParticipantData participant;
         dbWrapper.beginTransaction();
         try {
             final ParticipantData shell = ParticipantData.getSelfParticipant(subId);
@@ -1737,8 +1581,8 @@ public class BugleDatabaseOperations {
         Assert.isNotMainThread();
         Assert.isTrue(dbWrapper.getDatabase().inTransaction());
         int subId = ParticipantData.OTHER_THAN_SELF_SUB_ID;
-        String participantId = null;
-        String canonicalRecipient = null;
+        String participantId;
+        String canonicalRecipient;
         if (participant.isSelf()) {
             subId = participant.getSubId();
             canonicalRecipient = getCanonicalRecipientFromSubId(subId);
@@ -1789,19 +1633,13 @@ public class BugleDatabaseOperations {
     public static String getConversationFromOtherParticipantDestination(
             final DatabaseWrapper db, final String otherDestination) {
         Assert.isNotMainThread();
-        Cursor cursor = null;
-        try {
-            cursor = db.query(DatabaseHelper.CONVERSATIONS_TABLE,
-                    new String[] { ConversationColumns._ID },
-                    ConversationColumns.OTHER_PARTICIPANT_NORMALIZED_DESTINATION + "=?",
-                    new String[] { otherDestination }, null, null, null);
+        try (Cursor cursor = db.query(DatabaseHelper.CONVERSATIONS_TABLE,
+                new String[]{ConversationColumns._ID},
+                ConversationColumns.OTHER_PARTICIPANT_NORMALIZED_DESTINATION + "=?",
+                new String[]{otherDestination}, null, null, null)) {
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 return cursor.getString(0);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
         return null;
@@ -1814,7 +1652,7 @@ public class BugleDatabaseOperations {
     private static HashSet<String> getConversationsForParticipants(
             final ArrayList<String> participantIds) {
         final DatabaseWrapper db = DataModel.get().getDatabase();
-        final HashSet<String> conversationIds = new HashSet<String>();
+        final HashSet<String> conversationIds = new HashSet<>();
 
         final String selection = ConversationParticipantsColumns.PARTICIPANT_ID + "=?";
         for (final String participantId : participantIds) {
@@ -1852,21 +1690,8 @@ public class BugleDatabaseOperations {
             }
 
             MessagingContentProvider.notifyConversationListChanged();
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "Number of conversations refreshed:" + conversationIds.size());
-            }
+            LogUtil.v(TAG, "Number of conversations refreshed:" + conversationIds.size());
         }
-    }
-
-    /**
-     * Refresh conversation names/avatars based on a changed participant.
-     */
-    @DoesNotRunOnMainThread
-    public static void refreshConversationsForParticipant(final String participantId) {
-        Assert.isNotMainThread();
-        final ArrayList<String> participantList = new ArrayList<String>(1);
-        participantList.add(participantId);
-        refreshConversationsForParticipants(participantList);
     }
 
     /**
@@ -1894,7 +1719,7 @@ public class BugleDatabaseOperations {
             final String rowKey, final String rowId, final ContentValues values) {
         Assert.isNotMainThread();
         final StringBuilder sb = new StringBuilder();
-        final ArrayList<String> whereValues = new ArrayList<String>(values.size() + 1);
+        final ArrayList<String> whereValues = new ArrayList<>(values.size() + 1);
         whereValues.add(rowId);
 
         for (final String key : values.keySet()) {
@@ -1911,7 +1736,7 @@ public class BugleDatabaseOperations {
             }
         }
 
-        final String whereClause = rowKey + "=?" + " AND (" + sb.toString() + ")";
+        final String whereClause = rowKey + "=?" + " AND (" + sb + ")";
         final String [] whereValuesArray = whereValues.toArray(new String[whereValues.size()]);
         final int count = db.update(table, values, whereClause, whereValuesArray);
         if (count > 1) {

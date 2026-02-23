@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +38,6 @@ public class MultiSelectActionModeCallback implements Callback {
         void onActionBarDelete(Collection<SelectedConversation> conversations);
         void onActionBarArchive(Iterable<SelectedConversation> conversations,
                 boolean isToArchive);
-        void onActionBarNotification(Iterable<SelectedConversation> conversations,
-                boolean isNotificationOn);
         void onActionBarAddContact(final SelectedConversation conversation);
         void onActionBarBlock(final SelectedConversation conversation);
         void onActionBarHome();
@@ -52,7 +51,6 @@ public class MultiSelectActionModeCallback implements Callback {
         public final CharSequence participantLookupKey;
         public final boolean isGroup;
         public final boolean isArchived;
-        public final boolean notificationEnabled;
         public SelectedConversation(ConversationListItemData data) {
             conversationId = data.getConversationId();
             timestamp = data.getTimestamp();
@@ -61,7 +59,6 @@ public class MultiSelectActionModeCallback implements Callback {
             participantLookupKey = data.getParticipantLookupKey();
             isGroup = data.getIsGroup();
             isArchived = data.getIsArchived();
-            notificationEnabled = data.getNotificationEnabled();
         }
     }
 
@@ -72,8 +69,6 @@ public class MultiSelectActionModeCallback implements Callback {
     private MenuItem mUnarchiveMenuItem;
     private MenuItem mAddContactMenuItem;
     private MenuItem mBlockMenuItem;
-    private MenuItem mNotificationOnMenuItem;
-    private MenuItem mNotificationOffMenuItem;
     private boolean mHasInflated;
 
     public MultiSelectActionModeCallback(final Listener listener) {
@@ -89,8 +84,6 @@ public class MultiSelectActionModeCallback implements Callback {
         mUnarchiveMenuItem = menu.findItem(R.id.action_unarchive);
         mAddContactMenuItem = menu.findItem(R.id.action_add_contact);
         mBlockMenuItem = menu.findItem(R.id.action_block);
-        mNotificationOffMenuItem = menu.findItem(R.id.action_notification_off);
-        mNotificationOnMenuItem = menu.findItem(R.id.action_notification_on);
         mHasInflated = true;
         updateActionIconsVisiblity();
         return true;
@@ -103,36 +96,29 @@ public class MultiSelectActionModeCallback implements Callback {
 
     @Override
     public boolean onActionItemClicked(ActionMode actionMode, MenuItem menuItem) {
-        switch(menuItem.getItemId()) {
-            case R.id.action_delete:
-                mListener.onActionBarDelete(mSelectedConversations.values());
-                return true;
-            case R.id.action_archive:
-                mListener.onActionBarArchive(mSelectedConversations.values(), true);
-                return true;
-            case R.id.action_unarchive:
-                mListener.onActionBarArchive(mSelectedConversations.values(), false);
-                return true;
-            case R.id.action_notification_off:
-                mListener.onActionBarNotification(mSelectedConversations.values(), false);
-                return true;
-            case R.id.action_notification_on:
-                mListener.onActionBarNotification(mSelectedConversations.values(), true);
-                return true;
-            case R.id.action_add_contact:
-                Assert.isTrue(mSelectedConversations.size() == 1);
-                mListener.onActionBarAddContact(mSelectedConversations.valueAt(0));
-                return true;
-            case R.id.action_block:
-                Assert.isTrue(mSelectedConversations.size() == 1);
-                mListener.onActionBarBlock(mSelectedConversations.valueAt(0));
-                return true;
-            case android.R.id.home:
-                mListener.onActionBarHome();
-                return true;
-            default:
-                return false;
+        int itemId = menuItem.getItemId();
+        if (itemId == R.id.action_delete) {
+            mListener.onActionBarDelete(mSelectedConversations.values());
+            return true;
+        } else if (itemId == R.id.action_archive) {
+            mListener.onActionBarArchive(mSelectedConversations.values(), true);
+            return true;
+        } else if (itemId == R.id.action_unarchive) {
+            mListener.onActionBarArchive(mSelectedConversations.values(), false);
+            return true;
+        } else if (itemId == R.id.action_add_contact) {
+            Assert.isTrue(mSelectedConversations.size() == 1);
+            mListener.onActionBarAddContact(mSelectedConversations.valueAt(0));
+            return true;
+        } else if (itemId == R.id.action_block) {
+            Assert.isTrue(mSelectedConversations.size() == 1);
+            mListener.onActionBarBlock(mSelectedConversations.valueAt(0));
+            return true;
+        } else if (itemId == android.R.id.home) {
+            mListener.onActionBarHome();
+            return true;
         }
+        return false;
     }
 
     @Override
@@ -186,16 +172,8 @@ public class MultiSelectActionModeCallback implements Callback {
 
         boolean hasCurrentlyArchived = false;
         boolean hasCurrentlyUnarchived = false;
-        boolean hasCurrentlyOnNotification = false;
-        boolean hasCurrentlyOffNotification = false;
         final Iterable<SelectedConversation> conversations = mSelectedConversations.values();
         for (final SelectedConversation conversation : conversations) {
-            if (conversation.notificationEnabled) {
-                hasCurrentlyOnNotification = true;
-            } else {
-                hasCurrentlyOffNotification = true;
-            }
-
             if (conversation.isArchived) {
                 hasCurrentlyArchived = true;
             } else {
@@ -203,15 +181,10 @@ public class MultiSelectActionModeCallback implements Callback {
             }
 
             // If we found at least one of each example we don't need to keep looping.
-            if (hasCurrentlyOffNotification && hasCurrentlyOnNotification &&
-                    hasCurrentlyArchived && hasCurrentlyUnarchived) {
+            if (hasCurrentlyArchived && hasCurrentlyUnarchived) {
                 break;
             }
         }
-        // If we have notification off conversations we show on button, if we have notification on
-        // conversation we show off button. We can show both if we have a mixture.
-        mNotificationOffMenuItem.setVisible(hasCurrentlyOnNotification);
-        mNotificationOnMenuItem.setVisible(hasCurrentlyOffNotification);
 
         mArchiveMenuItem.setVisible(hasCurrentlyUnarchived);
         mUnarchiveMenuItem.setVisible(hasCurrentlyArchived);

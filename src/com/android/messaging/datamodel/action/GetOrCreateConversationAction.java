@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,8 @@ package com.android.messaging.datamodel.action;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.text.TextUtils;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.BugleDatabaseOperations;
@@ -43,12 +46,12 @@ public class GetOrCreateConversationAction extends Action implements Parcelable 
      */
     public interface GetOrCreateConversationActionListener {
         @RunsOnMainThread
-        abstract void onGetOrCreateConversationSucceeded(final ActionMonitor monitor,
-                final Object data, final String conversationId);
+        void onGetOrCreateConversationSucceeded(final ActionMonitor monitor,
+                                                final Object data, final String conversationId);
 
         @RunsOnMainThread
-        abstract void onGetOrCreateConversationFailed(final ActionMonitor monitor,
-                final Object data);
+        void onGetOrCreateConversationFailed(final ActionMonitor monitor,
+                                             final Object data);
     }
 
     public static GetOrCreateConversationActionMonitor getOrCreateConversation(
@@ -94,7 +97,8 @@ public class GetOrCreateConversationAction extends Action implements Parcelable 
 
         // First find the thread id for this list of participants.
         final ArrayList<ParticipantData> participants =
-                actionParameters.getParcelableArrayList(KEY_PARTICIPANTS_LIST);
+                actionParameters.getParcelableArrayList(KEY_PARTICIPANTS_LIST,
+                        ParticipantData.class);
         BugleDatabaseOperations.sanitizeConversationParticipants(participants);
         final ArrayList<String> recipients =
                 BugleDatabaseOperations.getRecipientsFromConversationParticipants(participants);
@@ -110,7 +114,7 @@ public class GetOrCreateConversationAction extends Action implements Parcelable 
         }
 
         final String conversationId = BugleDatabaseOperations.getOrCreateConversation(db, threadId,
-                false, participants, false, false, null);
+                false, participants);
 
         return conversationId;
     }
@@ -154,7 +158,7 @@ public class GetOrCreateConversationAction extends Action implements Parcelable 
     }
 
     public static final Parcelable.Creator<GetOrCreateConversationAction> CREATOR
-            = new Parcelable.Creator<GetOrCreateConversationAction>() {
+            = new Parcelable.Creator<>() {
         @Override
         public GetOrCreateConversationAction createFromParcel(final Parcel in) {
             return new GetOrCreateConversationAction(in);
@@ -167,7 +171,7 @@ public class GetOrCreateConversationAction extends Action implements Parcelable 
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

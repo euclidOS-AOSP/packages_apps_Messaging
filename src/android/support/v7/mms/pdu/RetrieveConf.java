@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007 Esmertec AG.
  * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +16,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms.pdu;
+package android.support.v7.mms.pdu;
 
 /**
  * M-Retrive.conf Pdu.
@@ -49,7 +50,7 @@ public class RetrieveConf extends MultimediaMessagePdu {
      * @param headers Headers for this PDU.
      * @param body Body of this PDu.
      */
-    RetrieveConf(PduHeaders headers, PduBody body) {
+    public RetrieveConf(PduHeaders headers, PduBody body) {
         super(headers, body);
     }
 
@@ -196,7 +197,12 @@ public class RetrieveConf extends MultimediaMessagePdu {
      * @return the value
      */
     public int getRetrieveStatus() {
-        return mPduHeaders.getOctet(PduHeaders.RETRIEVE_STATUS);
+        /*
+         * If the header is not there, assuming it is OK status.
+         * Some carriers may choose to not send this header.
+         */
+        return mPduHeaders.hasHeader(PduHeaders.RETRIEVE_STATUS) ?
+                mPduHeaders.getOctet(PduHeaders.RETRIEVE_STATUS) : PduHeaders.RETRIEVE_STATUS_OK;
     }
 
     /**

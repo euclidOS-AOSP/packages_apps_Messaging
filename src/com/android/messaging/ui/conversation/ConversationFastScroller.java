@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +24,6 @@ import android.content.res.Resources;
 import android.graphics.Rect;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Handler;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.recyclerview.widget.RecyclerView.AdapterDataObserver;
-import androidx.recyclerview.widget.RecyclerView.ViewHolder;
 import android.util.StateSet;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -37,11 +34,16 @@ import android.view.ViewGroupOverlay;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.RecyclerView.AdapterDataObserver;
+import androidx.recyclerview.widget.RecyclerView.ViewHolder;
+
 import com.android.messaging.R;
 import com.android.messaging.datamodel.data.ConversationMessageData;
 import com.android.messaging.ui.ConversationDrawables;
 import com.android.messaging.util.Dates;
-import com.android.messaging.util.OsUtil;
 
 /**
  * Adds a "fast-scroll" bar to the conversation RecyclerView that shows the current position within
@@ -63,10 +65,7 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
      *         (the feature requires Jellybean MR2 or newer)
      */
     public static ConversationFastScroller addTo(RecyclerView rv, int position) {
-        if (OsUtil.isAtLeastJB_MR2()) {
-            return new ConversationFastScroller(rv, position);
-        }
-        return null;
+        return new ConversationFastScroller(rv, position);
     }
 
     public static final int POSITION_RIGHT_SIDE = 0;
@@ -77,9 +76,7 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
     private static final int HIDE_ANIMATION_DURATION_MS = 300;
     private static final int HIDE_DELAY_MS = 1500;
 
-    private final Context mContext;
     private final RecyclerView mRv;
-    private final ViewGroupOverlay mOverlay;
     private final ImageView mTrackImageView;
     private final ImageView mThumbImageView;
     private final TextView mPreviewTextView;
@@ -111,16 +108,13 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
     private AnimatorSet mHideAnimation;
     private ObjectAnimator mHidePreviewAnimation;
 
-    private final Runnable mHideTrackRunnable = new Runnable() {
-        @Override
-        public void run() {
-            hide(true /* animate */);
-            mPendingHide = false;
-        }
+    private final Runnable mHideTrackRunnable = () -> {
+        hide(true /* animate */);
+        mPendingHide = false;
     };
 
     private ConversationFastScroller(RecyclerView rv, int position) {
-        mContext = rv.getContext();
+        final Context context  = rv.getContext();
         mRv = rv;
         mRv.addOnLayoutChangeListener(this);
         mRv.addOnScrollListener(this);
@@ -134,7 +128,7 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
         mPosRight = (position == POSITION_RIGHT_SIDE);
 
         // Cache the dimensions we'll need during layout
-        final Resources res = mContext.getResources();
+        final Resources res = context.getResources();
         mTrackWidth = res.getDimensionPixelSize(R.dimen.fastscroll_track_width);
         mThumbHeight = res.getDimensionPixelSize(R.dimen.fastscroll_thumb_height);
         mPreviewHeight = res.getDimensionPixelSize(R.dimen.fastscroll_preview_height);
@@ -144,7 +138,7 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
                 R.dimen.fastscroll_preview_margin_left_right);
         mTouchSlop = res.getDimensionPixelOffset(R.dimen.fastscroll_touch_slop);
 
-        final LayoutInflater inflator = LayoutInflater.from(mContext);
+        final LayoutInflater inflator = LayoutInflater.from(context);
         mTrackImageView = (ImageView) inflator.inflate(R.layout.fastscroll_track, null);
         mThumbImageView = (ImageView) inflator.inflate(R.layout.fastscroll_thumb, null);
         mPreviewTextView = (TextView) inflator.inflate(R.layout.fastscroll_preview, null);
@@ -152,10 +146,10 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
         refreshConversationThemeColor();
 
         // Add the fast scroll views to the overlay, so they are rendered above the list
-        mOverlay = rv.getOverlay();
-        mOverlay.add(mTrackImageView);
-        mOverlay.add(mThumbImageView);
-        mOverlay.add(mPreviewTextView);
+        final ViewGroupOverlay overlay = rv.getOverlay();
+        overlay.add(mTrackImageView);
+        overlay.add(mThumbImageView);
+        overlay.add(mPreviewTextView);
 
         hide(false /* animate */);
         mPreviewTextView.setAlpha(0f);
@@ -164,24 +158,16 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
     public void refreshConversationThemeColor() {
         mPreviewTextView.setBackground(
                 ConversationDrawables.get().getFastScrollPreviewDrawable(mPosRight));
-        if (OsUtil.isAtLeastL()) {
-            final StateListDrawable drawable = new StateListDrawable();
-            drawable.addState(new int[]{ android.R.attr.state_pressed },
-                    ConversationDrawables.get().getFastScrollThumbDrawable(true /* pressed */));
-            drawable.addState(StateSet.WILD_CARD,
-                    ConversationDrawables.get().getFastScrollThumbDrawable(false /* pressed */));
-            mThumbImageView.setImageDrawable(drawable);
-        } else {
-            // Android pre-L doesn't seem to handle a StateListDrawable containing a tinted
-            // drawable (it's rendered in the filter base color, which is red), so fall back to
-            // just the regular (non-pressed) drawable.
-            mThumbImageView.setImageDrawable(
-                    ConversationDrawables.get().getFastScrollThumbDrawable(false /* pressed */));
-        }
+        final StateListDrawable drawable = new StateListDrawable();
+        drawable.addState(new int[]{ android.R.attr.state_pressed },
+                ConversationDrawables.get().getFastScrollThumbDrawable(true /* pressed */));
+        drawable.addState(StateSet.WILD_CARD,
+                ConversationDrawables.get().getFastScrollThumbDrawable(false /* pressed */));
+        mThumbImageView.setImageDrawable(drawable);
     }
 
     @Override
-    public void onScrollStateChanged(final RecyclerView view, final int newState) {
+    public void onScrollStateChanged(@NonNull final RecyclerView view, final int newState) {
         if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
             // Only show the scrollbar once the user starts scrolling
             if (!mVisible && isEnabled()) {
@@ -269,7 +255,7 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
     }
 
     @Override
-    public void onScrolled(final RecyclerView view, final int dx, final int dy) {
+    public void onScrolled(@NonNull final RecyclerView view, final int dx, final int dy) {
         updateScrollPos();
     }
 
@@ -327,7 +313,7 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
     }
 
     @Override
-    public boolean onInterceptTouchEvent(RecyclerView rv, MotionEvent e) {
+    public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
         if (!mVisible) {
             return false;
         }
@@ -369,7 +355,7 @@ public class ConversationFastScroller extends RecyclerView.OnScrollListener impl
     }
 
     @Override
-    public void onTouchEvent(RecyclerView rv, MotionEvent e) {
+    public void onTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
         if (!mDragging) {
             return;
         }

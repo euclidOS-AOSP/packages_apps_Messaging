@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +18,12 @@
 package com.android.messaging.sms;
 
 import android.content.Context;
-import androidx.appcompat.mms.UserAgentInfoLoader;
+import android.support.v7.mms.UserAgentInfoLoader;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 
-import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.VersionUtil;
 
 /**
@@ -33,7 +32,7 @@ import com.android.messaging.util.VersionUtil;
 public class BugleUserAgentInfoLoader implements UserAgentInfoLoader {
     private static final String DEFAULT_USER_AGENT_PREFIX = "Bugle/";
 
-    private Context mContext;
+    private final Context mContext;
     private boolean mLoaded;
 
     private String mUserAgent;
@@ -74,13 +73,11 @@ public class BugleUserAgentInfoLoader implements UserAgentInfoLoader {
     }
 
     private void loadLocked() {
-        if (OsUtil.isAtLeastKLP()) {
-            // load the MMS User agent and UaProfUrl from TelephonyManager APIs
-            final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(
-                    Context.TELEPHONY_SERVICE);
-            mUserAgent = telephonyManager.getMmsUserAgent();
-            mUAProfUrl = telephonyManager.getMmsUAProfUrl();
-        }
+        // load the MMS User agent and UaProfUrl from TelephonyManager APIs
+        final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(
+                Context.TELEPHONY_SERVICE);
+        mUserAgent = telephonyManager.getMmsUserAgent();
+        mUAProfUrl = telephonyManager.getMmsUAProfUrl();
         // if user agent string isn't set, use the format "Bugle/<app_version>".
         if (TextUtils.isEmpty(mUserAgent)) {
             final String simpleVersionName = VersionUtil.getInstance(mContext).getSimpleName();
@@ -88,9 +85,7 @@ public class BugleUserAgentInfoLoader implements UserAgentInfoLoader {
         }
         // if the UAProfUrl isn't set, get it from Gservices
         if (TextUtils.isEmpty(mUAProfUrl)) {
-            mUAProfUrl = BugleGservices.get().getString(
-                    BugleGservicesKeys.MMS_UA_PROFILE_URL,
-                    BugleGservicesKeys.MMS_UA_PROFILE_URL_DEFAULT);
+            mUAProfUrl = BugleGservicesKeys.MMS_UA_PROFILE_URL_DEFAULT;
         }
     }
 }

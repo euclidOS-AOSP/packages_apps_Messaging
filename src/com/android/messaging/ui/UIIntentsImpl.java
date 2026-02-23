@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,28 +17,27 @@
 package com.android.messaging.ui;
 
 import android.app.Activity;
-import android.app.Fragment;
 import android.app.PendingIntent;
+import android.app.role.RoleManager;
 import android.appwidget.AppWidgetManager;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
-import android.content.ComponentName;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Point;
 import android.graphics.Rect;
-import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Intents;
 import android.provider.MediaStore;
-import android.provider.Telephony;
+import android.support.v7.mms.pdu.ContentType;
+import android.text.TextUtils;
+
 import androidx.annotation.Nullable;
 import androidx.core.app.TaskStackBuilder;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
-import android.text.TextUtils;
 
 import com.android.ex.photo.Intents.PhotoViewIntentBuilder;
 import com.android.messaging.R;
@@ -49,22 +49,17 @@ import com.android.messaging.datamodel.data.MessagePartData;
 import com.android.messaging.datamodel.data.ParticipantData;
 import com.android.messaging.receiver.NotificationReceiver;
 import com.android.messaging.sms.MmsSmsUtils;
-import com.android.messaging.ui.appsettings.ApnEditorActivity;
-import com.android.messaging.ui.appsettings.ApnSettingsActivity;
 import com.android.messaging.ui.appsettings.ApplicationSettingsActivity;
 import com.android.messaging.ui.appsettings.PerSubscriptionSettingsActivity;
 import com.android.messaging.ui.appsettings.SettingsActivity;
-import com.android.messaging.ui.attachmentchooser.AttachmentChooserActivity;
 import com.android.messaging.ui.conversation.ConversationActivity;
 import com.android.messaging.ui.conversation.LaunchConversationActivity;
 import com.android.messaging.ui.conversationlist.ArchivedConversationListActivity;
 import com.android.messaging.ui.conversationlist.ConversationListActivity;
 import com.android.messaging.ui.conversationlist.ForwardMessageActivity;
 import com.android.messaging.ui.conversationsettings.PeopleAndOptionsActivity;
-import com.android.messaging.ui.debug.DebugMmsConfigActivity;
 import com.android.messaging.ui.photoviewer.BuglePhotoViewActivity;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.ContentType;
 import com.android.messaging.util.ConversationIdSet;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.UiUtils;
@@ -74,8 +69,6 @@ import com.android.messaging.util.UriUtil;
  * A central repository of Intents used to start activities.
  */
 public class UIIntentsImpl extends UIIntents {
-    private static final String CELL_BROADCAST_LIST_ACTIVITY =
-            "com.android.cellbroadcastreceiver.CellBroadcastListActivity";
     private static final String CALL_TARGET_CLICK_KEY = "touchPoint";
     private static final String CALL_TARGET_CLICK_EXTRA_KEY =
             "android.telecom.extra.OUTGOING_CALL_EXTRAS";
@@ -153,13 +146,6 @@ public class UIIntentsImpl extends UIIntents {
         context.startActivity(intent);
     }
 
-    /**
-     * Get an intent which shows the low storage warning activity.
-     */
-    private Intent getSmsStorageLowWarningActivityIntent(final Context context) {
-        return new Intent(context, SmsStorageLowWarningActivity.class);
-    }
-
     @Override
     public void launchConversationActivity(final Context context,
             final String conversationId, final MessageData draft, final Bundle activityOptions,
@@ -201,11 +187,6 @@ public class UIIntentsImpl extends UIIntents {
     }
 
     @Override
-    public void launchDebugMmsConfigActivity(final Context context) {
-        context.startActivity(new Intent(context, DebugMmsConfigActivity.class));
-    }
-
-    @Override
     public void launchAddContactActivity(final Context context, final String destination) {
         final Intent intent = new Intent(Intent.ACTION_INSERT_OR_EDIT);
         final String destinationType = MmsSmsUtils.isEmailAddress(destination) ?
@@ -231,29 +212,6 @@ public class UIIntentsImpl extends UIIntents {
     public void launchBlockedParticipantsActivity(final Context context) {
         final Intent intent = new Intent(context, BlockedParticipantsActivity.class);
         context.startActivity(intent);
-    }
-
-    @Override
-    public void launchDocumentImagePicker(final Fragment fragment) {
-        final Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, MessagePartData.ACCEPTABLE_GALLERY_MEDIA_TYPES);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType(ContentType.ANY_TYPE);
-
-        fragment.startActivityForResult(intent, REQUEST_PICK_MEDIA_FROM_DOCUMENT_PICKER);
-    }
-
-    @Override
-    public void launchContactCardPicker(final Fragment fragment) {
-        final Intent intent = new Intent(Intent.ACTION_PICK);
-        intent.setType(Contacts.CONTENT_TYPE);
-
-        try {
-            fragment.startActivityForResult(intent, REQUEST_PICK_CONTACT_CARD);
-        } catch (final ActivityNotFoundException ex) {
-            LogUtil.w(LogUtil.BUGLE_TAG, "Couldn't find activity:", ex);
-            UiUtils.showToastAtBottom(R.string.activity_not_found_message);
-        }
     }
 
     @Override
@@ -302,17 +260,9 @@ public class UIIntentsImpl extends UIIntents {
         Assert.isTrue(MediaScratchFileProvider.isMediaScratchSpaceUri(vcardUri));
         final Intent intent = new Intent();
         intent.setAction(Intent.ACTION_VIEW);
-        intent.setDataAndType(vcardUri, ContentType.TEXT_VCARD.toLowerCase());
+        intent.setDataAndType(vcardUri, ContentType.TEXT_X_VCARD.toLowerCase());
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         startExternalActivity(context, intent);
-    }
-
-    @Override
-    public void launchAttachmentChooserActivity(final Activity activity,
-            final String conversationId, final int requestCode) {
-        final Intent intent = new Intent(activity, AttachmentChooserActivity.class);
-        intent.putExtra(UI_INTENT_EXTRA_CONVERSATION_ID, conversationId);
-        activity.startActivityForResult(intent, requestCode);
     }
 
     @Override
@@ -395,9 +345,8 @@ public class UIIntentsImpl extends UIIntents {
     @Override
     public Intent getIntentForConversationActivity(final Context context,
             final String conversationId, final MessageData draft) {
-        final Intent intent = getConversationActivityIntent(context, conversationId, draft,
+        return getConversationActivityIntent(context, conversationId, draft,
                 false /* withCustomTransition */);
-        return intent;
     }
 
     @Override
@@ -428,7 +377,7 @@ public class UIIntentsImpl extends UIIntents {
         }
         return PendingIntent.getBroadcast(context,
                 requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
     }
 
     /**
@@ -446,30 +395,9 @@ public class UIIntentsImpl extends UIIntents {
         // Adds the back stack for the Intent (plus the Intent itself)
         stackBuilder.addNextIntentWithParentStack(intent);
         final PendingIntent resultPendingIntent =
-            stackBuilder.getPendingIntent(requestCode, PendingIntent.FLAG_UPDATE_CURRENT);
+            stackBuilder.getPendingIntent(requestCode,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
         return resultPendingIntent;
-    }
-
-    @Override
-    public Intent getRingtonePickerIntent(final String title, final Uri existingUri,
-            final Uri defaultUri, final int toneType) {
-        return new Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
-                .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, toneType)
-                .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, title)
-                .putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existingUri)
-                .putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, defaultUri);
-    }
-
-    @Override
-    public PendingIntent getPendingIntentForLowStorageNotifications(final Context context) {
-        final TaskStackBuilder taskStackBuilder = TaskStackBuilder.create(context);
-        final Intent conversationListIntent = getConversationListActivityIntent(context);
-        taskStackBuilder.addNextIntent(conversationListIntent);
-        taskStackBuilder.addNextIntentWithParentStack(
-                getSmsStorageLowWarningActivityIntent(context));
-
-        return taskStackBuilder.getPendingIntent(
-                0, PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     @Override
@@ -479,38 +407,14 @@ public class UIIntentsImpl extends UIIntents {
     }
 
     @Override
-    public Intent getWirelessAlertsIntent() {
-        final Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.setComponent(new ComponentName(CMAS_COMPONENT, CELL_BROADCAST_LIST_ACTIVITY));
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        return intent;
-    }
-
-    @Override
-    public Intent getApnEditorIntent(final Context context, final String rowId, final int subId) {
-        final Intent intent = new Intent(context, ApnEditorActivity.class);
-        intent.putExtra(UI_INTENT_EXTRA_APN_ROW_ID, rowId);
-        intent.putExtra(UI_INTENT_EXTRA_SUB_ID, subId);
-        return intent;
-    }
-
-    @Override
-    public Intent getApnSettingsIntent(final Context context, final int subId) {
-        final Intent intent = new Intent(context, ApnSettingsActivity.class)
-                .putExtra(UI_INTENT_EXTRA_SUB_ID, subId);
-        return intent;
-    }
-
-    @Override
     public Intent getAdvancedSettingsIntent(final Context context) {
         return getPerSubscriptionSettingsIntent(context, ParticipantData.DEFAULT_SELF_SUB_ID, null);
     }
 
     @Override
     public Intent getChangeDefaultSmsAppIntent(final Activity activity) {
-        final Intent intent = new Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT);
-        intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, activity.getPackageName());
-        return intent;
+        RoleManager roleManager = activity.getSystemService(RoleManager.class);
+        return roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS);
     }
 
     @Override

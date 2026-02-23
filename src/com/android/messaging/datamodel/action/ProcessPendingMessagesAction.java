@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,28 +23,24 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.telephony.ServiceState;
 
+import androidx.annotation.NonNull;
+
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.BugleDatabaseOperations;
 import com.android.messaging.datamodel.DataModel;
 import com.android.messaging.datamodel.DataModelImpl;
 import com.android.messaging.datamodel.DatabaseHelper;
-import com.android.messaging.datamodel.DatabaseHelper.MessageColumns;
 import com.android.messaging.datamodel.DatabaseWrapper;
 import com.android.messaging.datamodel.MessagingContentProvider;
 import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.BuglePrefs;
 import com.android.messaging.util.BuglePrefsKeys;
 import com.android.messaging.util.ConnectivityUtil;
 import com.android.messaging.util.ConnectivityUtil.ConnectivityListener;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
-
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Action used to lookup any messages in the pending send/download state and either fail them or
@@ -59,18 +56,15 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
     private static final String KEY_SUB_ID = "sub_id";
 
     public static void processFirstPendingMessage() {
-        PhoneUtils.forEachActiveSubscription(new PhoneUtils.SubscriptionRunnable() {
-            @Override
-            public void runForSubscription(final int subId) {
-                // Clear any pending alarms or connectivity events
-                unregister(subId);
-                // Clear retry count
-                setRetry(0, subId);
-                // Start action
-                final ProcessPendingMessagesAction action = new ProcessPendingMessagesAction();
-                action.actionParameters.putInt(KEY_SUB_ID, subId);
-                action.start();
-            }
+        PhoneUtils.forEachActiveSubscription(subId -> {
+            // Clear any pending alarms or connectivity events
+            unregister(subId);
+            // Clear retry count
+            setRetry(0, subId);
+            // Start action
+            final ProcessPendingMessagesAction action = new ProcessPendingMessagesAction();
+            action.actionParameters.putInt(KEY_SUB_ID, subId);
+            action.start();
         });
     }
 
@@ -96,12 +90,10 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
             // return true.
             final ProcessPendingMessagesAction action = new ProcessPendingMessagesAction();
             if (action.queueActions(processingAction)) {
-                if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                    if (processingAction.hasBackgroundActions()) {
-                        LogUtil.v(TAG, "ProcessPendingMessagesAction: Action queued");
-                    } else {
-                        LogUtil.v(TAG, "ProcessPendingMessagesAction: No actions to queue");
-                    }
+                if (processingAction.hasBackgroundActions()) {
+                    LogUtil.v(TAG, "ProcessPendingMessagesAction: Action queued");
+                } else {
+                    LogUtil.v(TAG, "ProcessPendingMessagesAction: No actions to queue");
                 }
                 // Have queued next action if needed, nothing more to do
                 return;
@@ -112,23 +104,20 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
         }
         if (getHavePendingMessages(subId) || scheduleAlarm) {
             // Still have a pending message that needs to be queued for processing
-            final ConnectivityListener listener = new ConnectivityListener() {
-                @Override
-                public void onPhoneStateChanged(final int serviceState) {
-                    if (serviceState == ServiceState.STATE_IN_SERVICE) {
-                        LogUtil.i(TAG, "ProcessPendingMessagesAction: Now connected for subId "
-                                + subId + ", starting action");
+            final ConnectivityListener listener = serviceState -> {
+                if (serviceState == ServiceState.STATE_IN_SERVICE) {
+                    LogUtil.i(TAG, "ProcessPendingMessagesAction: Now connected for subId "
+                            + subId + ", starting action");
 
-                        // Clear any pending alarms or connectivity events but leave attempt count
-                        // alone
-                        unregister(subId);
+                    // Clear any pending alarms or connectivity events but leave attempt count
+                    // alone
+                    unregister(subId);
 
-                        // Start action
-                        final ProcessPendingMessagesAction action =
-                                new ProcessPendingMessagesAction();
-                        action.actionParameters.putInt(KEY_SUB_ID, subId);
-                        action.start();
-                    }
+                    // Start action
+                    final ProcessPendingMessagesAction action =
+                            new ProcessPendingMessagesAction();
+                    action.actionParameters.putInt(KEY_SUB_ID, subId);
+                    action.start();
                 }
             };
             // Read and increment attempt number from shared prefs
@@ -157,12 +146,8 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
 
         final ProcessPendingMessagesAction action = new ProcessPendingMessagesAction();
         action.actionParameters.putInt(KEY_SUB_ID, subId);
-        final long initialBackoffMs = BugleGservices.get().getLong(
-                BugleGservicesKeys.INITIAL_MESSAGE_RESEND_DELAY_MS,
-                BugleGservicesKeys.INITIAL_MESSAGE_RESEND_DELAY_MS_DEFAULT);
-        final long maxDelayMs = BugleGservices.get().getLong(
-                BugleGservicesKeys.MAX_MESSAGE_RESEND_DELAY_MS,
-                BugleGservicesKeys.MAX_MESSAGE_RESEND_DELAY_MS_DEFAULT);
+        final long initialBackoffMs = BugleGservicesKeys.INITIAL_MESSAGE_RESEND_DELAY_MS_DEFAULT;
+        final long maxDelayMs = BugleGservicesKeys.MAX_MESSAGE_RESEND_DELAY_MS_DEFAULT;
         long delayMs;
         long nextDelayMs = initialBackoffMs;
         do {
@@ -188,10 +173,8 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
         final ProcessPendingMessagesAction action = new ProcessPendingMessagesAction();
         action.schedule(PENDING_INTENT_BASE_REQUEST_CODE + subId, Long.MAX_VALUE);
 
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "ProcessPendingMessagesAction: Unregistering for connectivity changed "
-                    + "events and clearing scheduled alarm for subId " + subId);
-        }
+        LogUtil.v(TAG, "ProcessPendingMessagesAction: Unregistering for connectivity changed "
+                + "events and clearing scheduled alarm for subId " + subId);
     }
 
     private static void setRetry(final int retryAttempt, int subId) {
@@ -243,7 +226,6 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
     /**
      * Queue any pending actions
      *
-     * @param actionState
      * @return true if action queued (or no actions to queue) else false
      */
     private boolean queueActions(final Action processingAction) {
@@ -307,9 +289,7 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
                 scheduleProcessPendingMessagesAction(true /* failed */, this);
             }
         } else {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "ProcessPendingMessagesAction: Not default SMS app; rescheduling");
-            }
+            LogUtil.v(TAG, "ProcessPendingMessagesAction: Not default SMS app; rescheduling");
             scheduleProcessPendingMessagesAction(true /* failed */, this);
         }
 
@@ -320,8 +300,8 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
             final String selfId) {
         String toSendMessageId = null;
         Cursor cursor = null;
-        int sendingCnt = 0;
-        int pendingCnt = 0;
+        int sendingCnt;
+        int pendingCnt;
         int failedCnt = 0;
         db.beginTransaction();
         try {
@@ -356,12 +336,10 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
 
             // Prior to L_MR1, isActiveSubscription is true always
             boolean isActiveSubscription = true;
-            if (OsUtil.isAtLeastL_MR1()) {
-                final ParticipantData messageSelf =
-                        BugleDatabaseOperations.getExistingParticipant(db, selfId);
-                if (messageSelf == null || !messageSelf.isActiveSubscription()) {
-                    isActiveSubscription = false;
-                }
+            final ParticipantData messageSelf =
+                    BugleDatabaseOperations.getExistingParticipant(db, selfId);
+            if (messageSelf == null || !messageSelf.isActiveSubscription()) {
+                isActiveSubscription = false;
             }
             while (cursor.moveToNext()) {
                 final MessageData message = new MessageData();
@@ -406,8 +384,8 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
             final String selfId) {
         String toDownloadMessageId = null;
         Cursor cursor = null;
-        int downloadingCnt = 0;
-        int pendingCnt = 0;
+        int downloadingCnt;
+        int pendingCnt;
         db.beginTransaction();
         try {
             // First check if we have any messages already downloading
@@ -468,7 +446,7 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
     }
 
     public static final Parcelable.Creator<ProcessPendingMessagesAction> CREATOR
-            = new Parcelable.Creator<ProcessPendingMessagesAction>() {
+            = new Parcelable.Creator<>() {
         @Override
         public ProcessPendingMessagesAction createFromParcel(final Parcel in) {
             return new ProcessPendingMessagesAction(in);
@@ -481,7 +459,7 @@ public class ProcessPendingMessagesAction extends Action implements Parcelable {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

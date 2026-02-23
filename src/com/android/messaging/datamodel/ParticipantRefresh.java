@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,8 +39,6 @@ import com.android.messaging.util.ContactUtil;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
-import com.android.messaging.util.SafeAsyncTask;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 
 import java.util.ArrayList;
@@ -47,6 +46,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -60,7 +60,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     2. Partial refresh, this is triggered when a participant is added to a conversation. This
  *        normally happens during SMS sync.
  */
-@VisibleForTesting
 public class ParticipantRefresh {
     private static final String TAG = LogUtil.BUGLE_DATAMODEL_TAG;
 
@@ -95,20 +94,13 @@ public class ParticipantRefresh {
     private static volatile boolean sObserverInitialized = false;
     private static final Object sLock = new Object();
     private static final AtomicBoolean sFullRefreshScheduled = new AtomicBoolean(false);
-    private static final Runnable sFullRefreshRunnable = new Runnable() {
-        @Override
-        public void run() {
-            final boolean oldScheduled = sFullRefreshScheduled.getAndSet(false);
-            Assert.isTrue(oldScheduled);
-            refreshParticipants(REFRESH_MODE_FULL);
-        }
+    private static final Runnable sFullRefreshRunnable = () -> {
+        final boolean oldScheduled = sFullRefreshScheduled.getAndSet(false);
+        Assert.isTrue(oldScheduled);
+        refreshParticipants(REFRESH_MODE_FULL);
     };
-    private static final Runnable sSelfOnlyRefreshRunnable = new Runnable() {
-        @Override
-        public void run() {
+    private static final Runnable sSelfOnlyRefreshRunnable = () ->
             refreshParticipants(REFRESH_MODE_SELF_ONLY);
-        }
-    };
 
     /**
      * A customized content resolver to track contact changes.
@@ -123,9 +115,7 @@ public class ParticipantRefresh {
         @Override
         public void onChange(final boolean selfChange) {
             super.onChange(selfChange);
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "Contacts changed");
-            }
+            LogUtil.v(TAG, "Contacts changed");
             mContactChanged = true;
         }
 
@@ -151,11 +141,9 @@ public class ParticipantRefresh {
     public static void refreshParticipantsIfNeeded() {
         if (ParticipantRefresh.getNeedFullRefresh() &&
                 sFullRefreshScheduled.compareAndSet(false, true)) {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "Started full participant refresh");
-            }
-            SafeAsyncTask.executeOnThreadPool(sFullRefreshRunnable);
-        } else if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
+            LogUtil.v(TAG, "Started full participant refresh");
+            Executors.newSingleThreadExecutor().execute(sFullRefreshRunnable);
+        } else {
             LogUtil.v(TAG, "Skipped full participant refresh");
         }
     }
@@ -164,7 +152,7 @@ public class ParticipantRefresh {
      * Refresh self participants on subscription or settings change.
      */
     public static void refreshSelfParticipants() {
-        SafeAsyncTask.executeOnThreadPool(sSelfOnlyRefreshRunnable);
+        Executors.newSingleThreadExecutor().execute(sSelfOnlyRefreshRunnable);
     }
 
     private static boolean getNeedFullRefresh() {
@@ -206,27 +194,22 @@ public class ParticipantRefresh {
      * @param refreshMode the refresh mode desired. See {@link #REFRESH_MODE_FULL},
      *        {@link #REFRESH_MODE_INCREMENTAL}, and {@link #REFRESH_MODE_SELF_ONLY}
      */
-     @VisibleForTesting
      static void refreshParticipants(final int refreshMode) {
         Assert.inRange(refreshMode, REFRESH_MODE_FULL, REFRESH_MODE_SELF_ONLY);
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            switch (refreshMode) {
-                case REFRESH_MODE_FULL:
-                    LogUtil.v(TAG, "Start full participant refresh");
-                    break;
-                case REFRESH_MODE_INCREMENTAL:
-                    LogUtil.v(TAG, "Start partial participant refresh");
-                    break;
-                case REFRESH_MODE_SELF_ONLY:
-                    LogUtil.v(TAG, "Start self participant refresh");
-                    break;
-            }
+        switch (refreshMode) {
+            case REFRESH_MODE_FULL:
+                LogUtil.v(TAG, "Start full participant refresh");
+                break;
+            case REFRESH_MODE_INCREMENTAL:
+                LogUtil.v(TAG, "Start partial participant refresh");
+                break;
+            case REFRESH_MODE_SELF_ONLY:
+                LogUtil.v(TAG, "Start self participant refresh");
+                break;
         }
 
         if (!ContactUtil.hasReadContactsPermission() || !OsUtil.hasPhonePermission()) {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "Skipping participant referesh because of permissions");
-            }
+            LogUtil.v(TAG, "Skipping participant referesh because of permissions");
             return;
         }
 
@@ -240,7 +223,7 @@ public class ParticipantRefresh {
             refreshSelfParticipantList();
         }
 
-        final ArrayList<String> changedParticipants = new ArrayList<String>();
+        final ArrayList<String> changedParticipants = new ArrayList<>();
 
         String selection = null;
         String[] selectionArgs = null;
@@ -290,9 +273,7 @@ public class ParticipantRefresh {
             }
         }
 
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "Number of participants refreshed:" + changedParticipants.size());
-        }
+        LogUtil.v(TAG, "Number of participants refreshed:" + changedParticipants.size());
 
         // Refresh conversations for participants that are changed.
         if (changedParticipants.size() > 0) {
@@ -310,25 +291,19 @@ public class ParticipantRefresh {
             + ParticipantData.OTHER_THAN_SELF_SUB_ID
             + " )";
 
-    private static final Set<Integer> getExistingSubIds() {
+    private static Set<Integer> getExistingSubIds() {
         final DatabaseWrapper db = DataModel.get().getDatabase();
-        final HashSet<Integer> existingSubIds = new HashSet<Integer>();
+        final HashSet<Integer> existingSubIds = new HashSet<>();
 
-        Cursor cursor = null;
-        try {
-            cursor = db.query(DatabaseHelper.PARTICIPANTS_TABLE,
-                    ParticipantsQuery.PROJECTION,
-                    SELF_PARTICIPANTS_CLAUSE, null, null, null, null);
+        try (Cursor cursor = db.query(DatabaseHelper.PARTICIPANTS_TABLE,
+                ParticipantsQuery.PROJECTION,
+                SELF_PARTICIPANTS_CLAUSE, null, null, null, null)) {
 
             if (cursor != null) {
                 while (cursor.moveToNext()) {
                     final int subId = cursor.getInt(ParticipantsQuery.INDEX_SUB_ID);
                     existingSubIds.add(subId);
                 }
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
         return existingSubIds;
@@ -353,16 +328,12 @@ public class ParticipantRefresh {
      * that any other older SIM self participants are marked as inactive.
      */
     private static void refreshSelfParticipantList() {
-        if (!OsUtil.isAtLeastL_MR1()) {
-            return;
-        }
-
         final DatabaseWrapper db = DataModel.get().getDatabase();
 
         final List<SubscriptionInfo> subInfoRecords =
-                PhoneUtils.getDefault().toLMr1().getActiveSubscriptionInfoList();
+                PhoneUtils.getDefault().getActiveSubscriptionInfoList();
         final ArrayMap<Integer, SubscriptionInfo> activeSubscriptionIdToRecordMap =
-                new ArrayMap<Integer, SubscriptionInfo>();
+                new ArrayMap<>();
         db.beginTransaction();
         final Set<Integer> existingSubIds = getExistingSubIds();
 
@@ -445,21 +416,17 @@ public class ParticipantRefresh {
             changed = SELF_PHONE_NUMBER_OR_SUBSCRIPTION_CHANGED;
         }
 
-        if (OsUtil.isAtLeastL_MR1()) {
-            // Refresh the subscription info based on information from SubscriptionManager.
-            final SubscriptionInfo subscriptionInfo =
-                    PhoneUtils.get(participantData.getSubId()).toLMr1().getActiveSubscriptionInfo();
-            if (participantData.updateSubscriptionInfoForSelfIfChanged(subscriptionInfo)) {
-                changed = SELF_PHONE_NUMBER_OR_SUBSCRIPTION_CHANGED;
-            }
+        // Refresh the subscription info based on information from SubscriptionManager.
+        final SubscriptionInfo subscriptionInfo =
+                PhoneUtils.get(participantData.getSubId()).getActiveSubscriptionInfo();
+        if (participantData.updateSubscriptionInfoForSelfIfChanged(subscriptionInfo)) {
+            changed = SELF_PHONE_NUMBER_OR_SUBSCRIPTION_CHANGED;
         }
 
         // For self participant, try getting name/avatar from self profile in CP2 first.
         // TODO: in case of multi-sim, profile would not be able to be used for
         // different numbers. Need to figure out that.
-        Cursor selfCursor = null;
-        try {
-            selfCursor = ContactUtil.getSelf(db.getContext()).performSynchronousQuery();
+        try (Cursor selfCursor = ContactUtil.getSelf(db.getContext()).performSynchronousQuery()) {
             if (selfCursor != null && selfCursor.getCount() > 0) {
                 selfCursor.moveToNext();
                 final long selfContactId = selfCursor.getLong(ContactUtil.INDEX_CONTACT_ID);
@@ -479,10 +446,6 @@ public class ParticipantRefresh {
             // However, we need to at least log the exception so we know something was wrong.
             LogUtil.e(LogUtil.BUGLE_DATAMODEL_TAG, "Participant refresh: failed to refresh " +
                     "participant. exception=" + exception);
-        } finally {
-            if (selfCursor != null) {
-                selfCursor.close();
-            }
         }
         return changed;
     }
@@ -627,26 +590,20 @@ public class ParticipantRefresh {
      */
     private static List<String> getInactiveSelfParticipantIds() {
         final DatabaseWrapper db = DataModel.get().getDatabase();
-        final List<String> inactiveSelf = new ArrayList<String>();
+        final List<String> inactiveSelf = new ArrayList<>();
 
         final String selection = ParticipantColumns.SIM_SLOT_ID + "=? AND " +
                 SELF_PARTICIPANTS_CLAUSE;
-        Cursor cursor = null;
-        try {
-            cursor = db.query(DatabaseHelper.PARTICIPANTS_TABLE,
-                    new String[] { ParticipantColumns._ID },
-                    selection, new String[] { String.valueOf(ParticipantData.INVALID_SLOT_ID) },
-                    null, null, null);
+        try (Cursor cursor = db.query(DatabaseHelper.PARTICIPANTS_TABLE,
+                new String[]{ParticipantColumns._ID},
+                selection, new String[]{String.valueOf(ParticipantData.INVALID_SLOT_ID)},
+                null, null, null)) {
 
             if (cursor != null) {
                 while (cursor.moveToNext()) {
                     final String participantId = cursor.getString(0);
                     inactiveSelf.add(participantId);
                 }
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -658,7 +615,7 @@ public class ParticipantRefresh {
      */
     private static List<String> getConversationsWithSelfParticipantIds(final List<String> selfIds) {
         final DatabaseWrapper db = DataModel.get().getDatabase();
-        final List<String> conversationIds = new ArrayList<String>();
+        final List<String> conversationIds = new ArrayList<>();
 
         Cursor cursor = null;
         try {

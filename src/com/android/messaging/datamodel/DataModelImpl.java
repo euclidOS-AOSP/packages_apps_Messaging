@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +36,6 @@ import com.android.messaging.datamodel.data.ConversationData.ConversationDataLis
 import com.android.messaging.datamodel.data.ConversationListData;
 import com.android.messaging.datamodel.data.ConversationListData.ConversationListDataListener;
 import com.android.messaging.datamodel.data.DraftMessageData;
-import com.android.messaging.datamodel.data.GalleryGridItemData;
 import com.android.messaging.datamodel.data.LaunchConversationData;
 import com.android.messaging.datamodel.data.LaunchConversationData.LaunchConversationDataListener;
 import com.android.messaging.datamodel.data.MediaPickerData;
@@ -54,7 +54,6 @@ import com.android.messaging.util.Assert;
 import com.android.messaging.util.Assert.DoesNotRunOnMainThread;
 import com.android.messaging.util.ConnectivityUtil;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,8 +65,6 @@ public class DataModelImpl extends DataModel {
     private final DatabaseHelper mDatabaseHelper;
     private final SyncManager mSyncManager;
 
-    // Cached ConnectivityUtil instance for Pre-N.
-    private static ConnectivityUtil sConnectivityUtilInstanceCachePreN = null;
     // Cached ConnectivityUtil subId->instance for N and beyond
     private static final ConcurrentHashMap<Integer, ConnectivityUtil>
             sConnectivityUtilInstanceCacheN = new ConcurrentHashMap<>();
@@ -113,11 +110,6 @@ public class DataModelImpl extends DataModel {
     @Override
     public MediaPickerData createMediaPickerData(final Context context) {
         return new MediaPickerData(context);
-    }
-
-    @Override
-    public GalleryGridItemData createGalleryGridItemData() {
-        return new GalleryGridItemData();
     }
 
     @Override
@@ -214,58 +206,43 @@ public class DataModelImpl extends DataModel {
 
     @Override
     public void onApplicationCreated() {
-        if (OsUtil.isAtLeastN()) {
-            createConnectivityUtilForEachActiveSubscription();
-        } else {
-            sConnectivityUtilInstanceCachePreN = new ConnectivityUtil(mContext);
-        }
+        createConnectivityUtilForEachActiveSubscription();
 
         FixupMessageStatusOnStartupAction.fixupMessageStatus();
         ProcessPendingMessagesAction.processFirstPendingMessage();
         SyncManager.immediateSync();
 
-        if (OsUtil.isAtLeastL_MR1()) {
-            // Start listening for subscription change events for refreshing any data associated
-            // with subscriptions.
-            PhoneUtils.getDefault().toLMr1().registerOnSubscriptionsChangedListener(
-                    new SubscriptionManager.OnSubscriptionsChangedListener() {
-                        @Override
-                        public void onSubscriptionsChanged() {
-                            // TODO: This dynamically changes the mms config that app is
-                            // currently using. It may cause inconsistency in some cases. We need
-                            // to check the usage of mms config and handle the dynamic change
-                            // gracefully
-                            MmsConfig.loadAsync();
-                            ParticipantRefresh.refreshSelfParticipants();
-                            if (OsUtil.isAtLeastN()) {
-                                createConnectivityUtilForEachActiveSubscription();
-                            }
-                        }
-                    });
-        }
+        // Start listening for subscription change events for refreshing any data associated
+        // with subscriptions.
+        PhoneUtils.getDefault().registerOnSubscriptionsChangedListener(
+                new SubscriptionManager.OnSubscriptionsChangedListener() {
+                    @Override
+                    public void onSubscriptionsChanged() {
+                        // TODO: This dynamically changes the mms config that app is
+                        // currently using. It may cause inconsistency in some cases. We need
+                        // to check the usage of mms config and handle the dynamic change
+                        // gracefully
+                        MmsConfig.loadAsync();
+                        ParticipantRefresh.refreshSelfParticipants();
+                        createConnectivityUtilForEachActiveSubscription();
+                    }
+                });
     }
 
     private void createConnectivityUtilForEachActiveSubscription() {
-        PhoneUtils.forEachActiveSubscription(new PhoneUtils.SubscriptionRunnable() {
-            @Override
-            public void runForSubscription(int subId) {
-                // Create the ConnectivityUtil instance for given subId if absent.
-                if (subId <= ParticipantData.DEFAULT_SELF_SUB_ID) {
-                    subId = PhoneUtils.getDefault().getDefaultSmsSubscriptionId();
-                }
-                if (!sConnectivityUtilInstanceCacheN.containsKey(subId)) {
-                    sConnectivityUtilInstanceCacheN.put(
-                            subId, new ConnectivityUtil(mContext, subId));
-                }
+        PhoneUtils.forEachActiveSubscription(subId -> {
+            // Create the ConnectivityUtil instance for given subId if absent.
+            if (subId <= ParticipantData.DEFAULT_SELF_SUB_ID) {
+                subId = PhoneUtils.getDefault().getDefaultSmsSubscriptionId();
+            }
+            if (!sConnectivityUtilInstanceCacheN.containsKey(subId)) {
+                sConnectivityUtilInstanceCacheN.put(
+                        subId, new ConnectivityUtil(mContext, subId));
             }
         });
     }
 
     public static ConnectivityUtil getConnectivityUtil(final int subId) {
-        if (OsUtil.isAtLeastN()) {
-            return sConnectivityUtilInstanceCacheN.get(subId);
-        } else {
-            return sConnectivityUtilInstanceCachePreN;
-        }
+        return sConnectivityUtilInstanceCacheN.get(subId);
     }
 }

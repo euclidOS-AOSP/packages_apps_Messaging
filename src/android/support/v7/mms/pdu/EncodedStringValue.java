@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007-2008 Esmertec AG.
  * Copyright (C) 2007-2008 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +16,16 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms.pdu;
+package android.support.v7.mms.pdu;
 
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Encoded-string-value = Text-string | Value-length Char-set Text-string
@@ -71,11 +74,25 @@ public class EncodedStringValue implements Cloneable {
     }
 
     public EncodedStringValue(String data) {
+        this(CharacterSets.DEFAULT_CHARSET, data);
+    }
+
+    /**
+     * Constructor
+     *
+     * @param data The text in Java String
+     * @throws NullPointerException if Text-string value is null.
+     */
+    public EncodedStringValue(int charset, String data) {
+        if (null == data) {
+            throw new NullPointerException("EncodedStringValue: Text-string is null");
+        }
+        mCharacterSet = charset;
         try {
-            mData = data.getBytes(CharacterSets.DEFAULT_CHARSET_NAME);
-            mCharacterSet = CharacterSets.DEFAULT_CHARSET;
+            mData = data.getBytes(CharacterSets.getMimeName(charset));
         } catch (UnsupportedEncodingException e) {
-            Log.e(TAG, "Default encoding must be supported.", e);
+            Log.e(TAG, "Input encoding " + charset + " must be supported.", e);
+            mData = data.getBytes();
         }
     }
 
@@ -143,11 +160,7 @@ public class EncodedStringValue implements Cloneable {
             	if (LOCAL_LOGV) {
             		Log.v(TAG, e.getMessage(), e);
             	}
-            	try {
-                    return new String(mData, CharacterSets.MIMENAME_ISO_8859_1);
-                } catch (UnsupportedEncodingException e2) {
-                    return new String(mData); // system default encoding.
-                }
+                return new String(mData, StandardCharsets.ISO_8859_1);
             }
         }
     }
@@ -186,6 +199,7 @@ public class EncodedStringValue implements Cloneable {
      * (non-Javadoc)
      * @see java.lang.Object#clone()
      */
+    @NonNull
     @Override
     public Object clone() throws CloneNotSupportedException {
         int len = mData.length;
@@ -221,43 +235,6 @@ public class EncodedStringValue implements Cloneable {
             }
         }
         return ret;
-    }
-
-    /**
-     * Extract an EncodedStringValue[] from a given String.
-     */
-    public static EncodedStringValue[] extract(String src) {
-        String[] values = src.split(";");
-
-        ArrayList<EncodedStringValue> list = new ArrayList<EncodedStringValue>();
-        for (int i = 0; i < values.length; i++) {
-            if (values[i].length() > 0) {
-                list.add(new EncodedStringValue(values[i]));
-            }
-        }
-
-        int len = list.size();
-        if (len > 0) {
-            return list.toArray(new EncodedStringValue[len]);
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Concatenate an EncodedStringValue[] into a single String.
-     */
-    public static String concat(EncodedStringValue[] addr) {
-        StringBuilder sb = new StringBuilder();
-        int maxIndex = addr.length - 1;
-        for (int i = 0; i <= maxIndex; i++) {
-            sb.append(addr[i].getString());
-            if (i < maxIndex) {
-                sb.append(";");
-            }
-        }
-
-        return sb.toString();
     }
 
     public static EncodedStringValue copy(EncodedStringValue value) {

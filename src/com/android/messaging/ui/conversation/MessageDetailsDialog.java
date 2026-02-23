@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +21,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.Resources;
 import android.net.Uri;
+import android.support.v7.mms.pdu.PduHeaders;
 import android.text.TextUtils;
 import android.text.format.Formatter;
 
@@ -30,16 +32,12 @@ import com.android.messaging.datamodel.DataModel;
 import com.android.messaging.datamodel.data.ConversationMessageData;
 import com.android.messaging.datamodel.data.ConversationParticipantsData;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.mmslib.pdu.PduHeaders;
 import com.android.messaging.sms.DatabaseMessages.MmsMessage;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.Assert.DoesNotRunOnMainThread;
 import com.android.messaging.util.Dates;
-import com.android.messaging.util.DebugUtils;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
-import com.android.messaging.util.SafeAsyncTask;
 
 import java.util.List;
 
@@ -52,28 +50,14 @@ public class MessageDetailsDialog {
 
     public static void show(final Context context, final ConversationMessageData data,
             final ConversationParticipantsData participants, final ParticipantData self) {
-        if (DebugUtils.isDebugEnabled()) {
-            new SafeAsyncTask<Void, Void, String>() {
-                @Override
-                protected String doInBackgroundTimed(Void... params) {
-                    return getMessageDetails(context, data, participants, self);
-                }
-
-                @Override
-                protected void onPostExecute(String messageDetails) {
-                    showDialog(context, messageDetails);
-                }
-            }.executeOnThreadPool(null, null, null);
-        } else {
-            String messageDetails = getMessageDetails(context, data, participants, self);
-            showDialog(context, messageDetails);
-        }
+        String messageDetails = getMessageDetails(context, data, participants, self);
+        showDialog(context, messageDetails);
     }
 
     private static String getMessageDetails(final Context context,
             final ConversationMessageData data,
             final ConversationParticipantsData participants, final ParticipantData self) {
-        String messageDetails = null;
+        String messageDetails;
         if (data.getIsSms()) {
             messageDetails = getSmsMessageDetails(data, participants, self);
         } else {
@@ -86,7 +70,7 @@ public class MessageDetailsDialog {
 
     private static void showDialog(final Context context, String messageDetails) {
         if (!TextUtils.isEmpty(messageDetails)) {
-            new AlertDialog.Builder(context)
+            new AlertDialog.Builder(context, R.style.AlertDialogTheme)
                     .setTitle(R.string.message_details_title)
                     .setMessage(messageDetails)
                     .setCancelable(true)
@@ -139,10 +123,6 @@ public class MessageDetailsDialog {
         appendSentOrReceivedTimestamp(res, details, data);
 
         appendSimInfo(res, self, details);
-
-        if (DebugUtils.isDebugEnabled()) {
-            appendDebugInfo(details, data);
-        }
 
         return details.toString();
     }
@@ -205,10 +185,6 @@ public class MessageDetailsDialog {
         }
 
         appendSimInfo(res, self, details);
-
-        if (DebugUtils.isDebugEnabled()) {
-            appendDebugInfo(details, data);
-        }
 
         return details.toString();
     }
@@ -297,7 +273,7 @@ public class MessageDetailsDialog {
         if (recipients != null) {
             details.append('\n');
             details.append("Thread recipients: ");
-            details.append(recipients.toString());
+            details.append(recipients);
 
             if (mms != null) {
                 final String from = MmsUtils.getMmsSender(recipients, mms.getUri());
@@ -338,7 +314,6 @@ public class MessageDetailsDialog {
 
     /**
      * Convert the numeric mms priority into a human-readable string
-     * @param res
      * @param priorityValue coded PduHeader priority
      * @return string representation of the priority
      */
@@ -356,9 +331,7 @@ public class MessageDetailsDialog {
 
     private static void appendSimInfo(final Resources res,
             final ParticipantData self, final StringBuilder outString) {
-        if (!OsUtil.isAtLeastL_MR1()
-                || self == null
-                || PhoneUtils.getDefault().getActiveSubscriptionCount() < 2) {
+        if (self == null || PhoneUtils.getDefault().getActiveSubscriptionCount() < 2) {
             return;
         }
         // The appended SIM info would look like:

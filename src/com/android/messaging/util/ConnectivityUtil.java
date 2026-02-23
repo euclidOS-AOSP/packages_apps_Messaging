@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,64 +18,38 @@
 package com.android.messaging.util;
 
 import android.content.Context;
-import android.telephony.PhoneStateListener;
+import android.os.Handler;
+import android.os.Looper;
 import android.telephony.ServiceState;
+import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
 
-import com.android.messaging.datamodel.data.ParticipantData;
+import androidx.annotation.NonNull;
 
 /**
  * ConnectivityUtil listens to the network service state changes.
- *
- * On N and beyond, This class instance can be created via ConnectivityUtil(context, subId), use
- * ConnectivityUtil(context) for others.
- *
- * Note that TelephonyManager has createForSubscriptionId() for a specific subId from N but listen()
- * does not use the subId on the manager, and uses the default subId on PhoneStateListener. From O,
- * the manager uses its' own subId in listen().
  */
 public class ConnectivityUtil {
     // Assume not connected until informed differently
     private volatile int mCurrentServiceState = ServiceState.STATE_POWER_OFF;
 
     private final TelephonyManager mTelephonyManager;
+    private final Handler mHandler;
 
     private ConnectivityListener mListener;
 
     public interface ConnectivityListener {
-        public void onPhoneStateChanged(int serviceState);
-    }
-
-    public ConnectivityUtil(final Context context) {
-        mTelephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+        void onPhoneStateChanged(int serviceState);
     }
 
     public ConnectivityUtil(final Context context, final int subId) {
-        Assert.isTrue(OsUtil.isAtLeastN());
         mTelephonyManager =
                 ((TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE))
                         .createForSubscriptionId(subId);
+        mHandler = new Handler(Looper.getMainLooper());
     }
 
-    public int getCurrentServiceState() {
-        return mCurrentServiceState;
-    }
-
-    private final PhoneStateListener mPhoneStateListener = new PhoneStateListener() {
-        @Override
-        public void onServiceStateChanged(final ServiceState serviceState) {
-            if (mCurrentServiceState != serviceState.getState()) {
-                mCurrentServiceState = serviceState.getState();
-                onPhoneStateChanged(mCurrentServiceState);
-            }
-        }
-
-        @Override
-        public void onDataConnectionStateChanged(final int state) {
-            mCurrentServiceState = (state == TelephonyManager.DATA_DISCONNECTED) ?
-                    ServiceState.STATE_OUT_OF_SERVICE : ServiceState.STATE_IN_SERVICE;
-        }
-    };
+    private final PhoneStateListener mPhoneStateListener = new PhoneStateListener();
 
     private void onPhoneStateChanged(final int serviceState) {
         final ConnectivityListener listener = mListener;
@@ -89,8 +64,8 @@ public class ConnectivityUtil {
             if (mTelephonyManager != null) {
                 mCurrentServiceState = (PhoneUtils.getDefault().isAirplaneModeOn() ?
                         ServiceState.STATE_POWER_OFF : ServiceState.STATE_IN_SERVICE);
-                mTelephonyManager.listen(mPhoneStateListener,
-                        PhoneStateListener.LISTEN_SERVICE_STATE);
+                mTelephonyManager.registerTelephonyCallback(mHandler::post,
+                        mPhoneStateListener);
             }
         }
         mListener = listener;
@@ -99,10 +74,28 @@ public class ConnectivityUtil {
     public void unregister() {
         if (mListener != null) {
             if (mTelephonyManager != null) {
-                mTelephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_NONE);
+                mTelephonyManager.unregisterTelephonyCallback(mPhoneStateListener);
                 mCurrentServiceState = ServiceState.STATE_POWER_OFF;
             }
         }
         mListener = null;
+    }
+
+    private class PhoneStateListener extends TelephonyCallback implements
+            TelephonyCallback.DataConnectionStateListener, TelephonyCallback.ServiceStateListener {
+
+        @Override
+        public void onDataConnectionStateChanged(int state, int networkType) {
+            mCurrentServiceState = (state == TelephonyManager.DATA_DISCONNECTED) ?
+                    ServiceState.STATE_OUT_OF_SERVICE : ServiceState.STATE_IN_SERVICE;
+        }
+
+        @Override
+        public void onServiceStateChanged(@NonNull ServiceState serviceState) {
+            if (mCurrentServiceState != serviceState.getState()) {
+                mCurrentServiceState = serviceState.getState();
+                onPhoneStateChanged(mCurrentServiceState);
+            }
+        }
     }
 }

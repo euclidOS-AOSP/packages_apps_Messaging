@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +27,8 @@ import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 
-import com.android.messaging.BugleApplication;
+import androidx.annotation.NonNull;
+
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.DatabaseHelper.ConversationColumns;
 import com.android.messaging.datamodel.DatabaseHelper.ConversationParticipantsColumns;
@@ -35,13 +37,10 @@ import com.android.messaging.datamodel.data.ConversationListItemData;
 import com.android.messaging.datamodel.data.ConversationMessageData;
 import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.util.Assert;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.widget.BugleWidgetProvider;
 import com.android.messaging.widget.WidgetConversationProvider;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
@@ -53,7 +52,6 @@ import java.io.PrintWriter;
 public class MessagingContentProvider extends ContentProvider {
     private static final String TAG = LogUtil.BUGLE_TAG;
 
-    @VisibleForTesting
     public static final String AUTHORITY =
             "com.android.messaging.datamodel.MessagingContentProvider";
     private static final String CONTENT_AUTHORITY = "content://" + AUTHORITY + '/';
@@ -244,12 +242,6 @@ public class MessagingContentProvider extends ContentProvider {
         super();
     }
 
-    @VisibleForTesting
-    public void setDatabaseForTest(final DatabaseWrapper db) {
-        Assert.isTrue(BugleApplication.isRunningTests());
-        mDatabaseWrapper = db;
-    }
-
     private DatabaseWrapper getDatabaseWrapper() {
         if (mDatabaseWrapper == null) {
             mDatabaseWrapper = mDatabaseHelper.getDatabase();
@@ -258,17 +250,8 @@ public class MessagingContentProvider extends ContentProvider {
     }
 
     @Override
-    public Cursor query(final Uri uri, final String[] projection, String selection,
-            final String[] selectionArgs, String sortOrder) {
-
-        // Processes other than self are allowed to temporarily access the media
-        // scratch space; we grant uri read access on a case-by-case basis. Dialer app and
-        // contacts app would doQuery() on the vCard uri before trying to open the inputStream.
-        // There's nothing that we need to return for this uri so just No-Op.
-        //if (isMediaScratchSpaceUri(uri)) {
-        //    return null;
-        //}
-
+    public Cursor query(@NonNull final Uri uri, final String[] projection, String selection,
+                        final String[] selectionArgs, String sortOrder) {
         final SQLiteQueryBuilder queryBuilder = new SQLiteQueryBuilder();
 
         String[] queryArgs = selectionArgs;
@@ -384,7 +367,7 @@ public class MessagingContentProvider extends ContentProvider {
     }
 
     @Override
-    public String getType(final Uri uri) {
+    public String getType(@NonNull final Uri uri) {
         final StringBuilder sb = new
                 StringBuilder("vnd.android.cursor.dir/vnd.android.messaging.");
 
@@ -405,24 +388,24 @@ public class MessagingContentProvider extends ContentProvider {
     }
 
     @Override
-    public ParcelFileDescriptor openFile(final Uri uri, final String fileMode)
+    public ParcelFileDescriptor openFile(@NonNull final Uri uri, @NonNull final String fileMode)
             throws FileNotFoundException {
         throw new IllegalArgumentException("openFile not supported: " + uri);
     }
 
     @Override
-    public Uri insert(final Uri uri, final ContentValues values) {
+    public Uri insert(@NonNull final Uri uri, final ContentValues values) {
         throw new IllegalStateException("Insert not supported " + uri);
     }
 
     @Override
-    public int delete(final Uri uri, final String selection, final String[] selectionArgs) {
+    public int delete(@NonNull final Uri uri, final String selection, final String[] selectionArgs) {
         throw new IllegalArgumentException("Delete not supported: " + uri);
     }
 
     @Override
-    public int update(final Uri uri, final ContentValues values, final String selection,
-            final String[] selectionArgs) {
+    public int update(@NonNull final Uri uri, final ContentValues values, final String selection,
+                      final String[] selectionArgs) {
         throw new IllegalArgumentException("Update not supported: " + uri);
     }
 
@@ -455,21 +438,15 @@ public class MessagingContentProvider extends ContentProvider {
         // First dump out the default SMS app package name
         String defaultSmsApp = PhoneUtils.getDefault().getDefaultSmsApp();
         if (TextUtils.isEmpty(defaultSmsApp)) {
-            if (OsUtil.isAtLeastKLP()) {
-                defaultSmsApp = "None";
-            } else {
-                defaultSmsApp = "None (pre-Kitkat)";
-            }
+            defaultSmsApp = "None";
         }
         writer.println("Default SMS app: " + defaultSmsApp);
-        // Now dump logs
-        LogUtil.dump(writer);
     }
 
     @Override
     public boolean onCreate() {
         // This is going to wind up calling into createDatabase() below.
-        mDatabaseHelper = (DatabaseHelper) getDatabase();
+        mDatabaseHelper = getDatabase();
         // We cannot initialize mDatabaseWrapper yet as the Factory may not be initialized
         return true;
     }

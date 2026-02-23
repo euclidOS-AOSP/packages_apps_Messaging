@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +23,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.BugleDatabaseOperations;
@@ -51,14 +54,14 @@ public class DownloadMmsAction extends Action implements Parcelable {
      */
     public interface DownloadMmsActionListener {
         @RunsOnMainThread
-        abstract void onDownloadMessageStarting(final ActionMonitor monitor,
-                final Object data, final MessageData message);
+        void onDownloadMessageStarting(final ActionMonitor monitor,
+                                       final Object data, final MessageData message);
         @RunsOnMainThread
-        abstract void onDownloadMessageSucceeded(final ActionMonitor monitor,
-                final Object data, final MessageData message);
+        void onDownloadMessageSucceeded(final ActionMonitor monitor,
+                                        final Object data, final MessageData message);
         @RunsOnMainThread
-        abstract void onDownloadMessageFailed(final ActionMonitor monitor,
-                final Object data, final MessageData message);
+        void onDownloadMessageFailed(final ActionMonitor monitor,
+                                     final Object data, final MessageData message);
     }
 
     /**
@@ -234,7 +237,7 @@ public class DownloadMmsAction extends Action implements Parcelable {
         final Context context = Factory.get().getApplicationContext();
         final int subId = actionParameters.getInt(KEY_SUB_ID);
         final String messageId = actionParameters.getString(KEY_MESSAGE_ID);
-        final Uri notificationUri = actionParameters.getParcelable(KEY_NOTIFICATION_URI);
+        final Uri notificationUri = actionParameters.getParcelable(KEY_NOTIFICATION_URI, Uri.class);
         final String subPhoneNumber = actionParameters.getString(KEY_SUB_PHONE_NUMBER);
         final String transactionId = actionParameters.getString(KEY_TRANSACTION_ID);
         final String contentLocation = actionParameters.getString(KEY_CONTENT_LOCATION);
@@ -324,8 +327,7 @@ public class DownloadMmsAction extends Action implements Parcelable {
         super(in);
     }
 
-    public static final Parcelable.Creator<DownloadMmsAction> CREATOR
-            = new Parcelable.Creator<DownloadMmsAction>() {
+    public static final Parcelable.Creator<DownloadMmsAction> CREATOR = new Parcelable.Creator<>() {
         @Override
         public DownloadMmsAction createFromParcel(final Parcel in) {
             return new DownloadMmsAction(in);
@@ -338,7 +340,7 @@ public class DownloadMmsAction extends Action implements Parcelable {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

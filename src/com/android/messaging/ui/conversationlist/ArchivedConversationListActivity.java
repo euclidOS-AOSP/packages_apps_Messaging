@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +18,11 @@ package com.android.messaging.ui.conversationlist;
 
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
-import androidx.appcompat.app.ActionBar;
-import android.view.Menu;
 import android.view.MenuItem;
 
+import androidx.appcompat.app.ActionBar;
+
 import com.android.messaging.R;
-import com.android.messaging.util.DebugUtils;
 
 public class ArchivedConversationListActivity extends AbstractConversationListActivity {
 
@@ -30,9 +30,12 @@ public class ArchivedConversationListActivity extends AbstractConversationListAc
     protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        final ConversationListFragment fragment =
+        mConversationListFragment =
                 ConversationListFragment.createArchivedConversationListFragment();
-        getFragmentManager().beginTransaction().add(android.R.id.content, fragment).commit();
+        getSupportFragmentManager()
+                .beginTransaction()
+                .add(android.R.id.content, mConversationListFragment)
+                .commit();
         invalidateActionBar();
     }
 
@@ -57,31 +60,12 @@ public class ArchivedConversationListActivity extends AbstractConversationListAc
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        if (super.onCreateOptionsMenu(menu)) {
+    public boolean onOptionsItemSelected(MenuItem menuItem) {
+        if (menuItem.getItemId() == android.R.id.home) {
+            onActionBarHome();
             return true;
         }
-        getMenuInflater().inflate(R.menu.archived_conversation_list_menu, menu);
-        final MenuItem item = menu.findItem(R.id.action_debug_options);
-        if (item != null) {
-            final boolean enableDebugItems = DebugUtils.isDebugEnabled();
-            item.setVisible(enableDebugItems).setEnabled(enableDebugItems);
-        }
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem menuItem) {
-        switch(menuItem.getItemId()) {
-            case R.id.action_debug_options:
-                onActionBarDebug();
-                return true;
-            case android.R.id.home:
-                onActionBarHome();
-                return true;
-            default:
-                return super.onOptionsItemSelected(menuItem);
-        }
+        return super.onOptionsItemSelected(menuItem);
     }
 
     @Override

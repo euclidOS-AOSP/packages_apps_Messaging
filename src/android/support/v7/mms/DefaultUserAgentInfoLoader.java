@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.content.Context;
 import android.telephony.TelephonyManager;
@@ -30,7 +31,7 @@ class DefaultUserAgentInfoLoader implements UserAgentInfoLoader {
     private static final String DEFAULT_UA_PROF_URL =
             "http://www.gstatic.com/android/sms/mms_ua_profile.xml";
 
-    private Context mContext;
+    private final Context mContext;
     private boolean mLoaded;
 
     private String mUserAgent;
@@ -71,13 +72,11 @@ class DefaultUserAgentInfoLoader implements UserAgentInfoLoader {
     }
 
     private void loadLocked() {
-        if (Utils.hasUserAgentApi()) {
-            // load the MMS User agent and UaProfUrl from TelephonyManager APIs
-            final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(
-                    Context.TELEPHONY_SERVICE);
-            mUserAgent = telephonyManager.getMmsUserAgent();
-            mUAProfUrl = telephonyManager.getMmsUAProfUrl();
-        }
+        // load the MMS User agent and UaProfUrl from TelephonyManager APIs
+        final TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(
+                Context.TELEPHONY_SERVICE);
+        mUserAgent = telephonyManager.getMmsUserAgent();
+        mUAProfUrl = telephonyManager.getMmsUAProfUrl();
         if (TextUtils.isEmpty(mUserAgent)) {
             mUserAgent = DEFAULT_USER_AGENT;
         }

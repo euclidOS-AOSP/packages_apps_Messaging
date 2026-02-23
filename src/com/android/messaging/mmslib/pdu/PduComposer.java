@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007-2008 Esmertec AG.
  * Copyright (C) 2007-2008 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +20,16 @@ package com.android.messaging.mmslib.pdu;
 
 import android.content.ContentResolver;
 import android.content.Context;
-import androidx.collection.SimpleArrayMap;
+import android.support.v7.mms.pdu.EncodedStringValue;
+import android.support.v7.mms.pdu.GenericPdu;
+import android.support.v7.mms.pdu.PduBody;
+import android.support.v7.mms.pdu.PduContentTypes;
+import android.support.v7.mms.pdu.PduHeaders;
+import android.support.v7.mms.pdu.PduPart;
+import android.support.v7.mms.pdu.SendReq;
 import android.text.TextUtils;
+
+import androidx.collection.SimpleArrayMap;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -87,22 +96,22 @@ public class PduComposer {
     /**
      * The output message.
      */
-    protected ByteArrayOutputStream mMessage = null;
+    protected ByteArrayOutputStream mMessage;
 
     /**
      * The PDU.
      */
-    private GenericPdu mPdu = null;
+    private GenericPdu mPdu;
 
     /**
      * Current visiting position of the mMessage.
      */
-    protected int mPosition = 0;
+    protected int mPosition;
 
     /**
      * Message compose buffer stack.
      */
-    private BufferStack mStack = null;
+    private BufferStack mStack;
 
     /**
      * Content resolver.
@@ -112,15 +121,15 @@ public class PduComposer {
     /**
      * Header of this pdu.
      */
-    private PduHeaders mPduHeader = null;
+    private PduHeaders mPduHeader;
 
     /**
      * Map of all content type
      */
-    private static SimpleArrayMap<String, Integer> mContentTypeMap = null;
+    private static SimpleArrayMap<String, Integer> mContentTypeMap;
 
     static {
-        mContentTypeMap = new SimpleArrayMap<String, Integer>();
+        mContentTypeMap = new SimpleArrayMap<>();
 
         int i;
         for (i = 0; i < PduContentTypes.contentTypes.length; i++) {
@@ -460,7 +469,7 @@ public class PduComposer {
     }
 
     private EncodedStringValue appendAddressType(final EncodedStringValue address) {
-        EncodedStringValue temp = null;
+        EncodedStringValue temp;
 
         try {
             final int addressType = checkAddressType(address.getString());
@@ -521,8 +530,8 @@ public class PduComposer {
                 }
 
                 EncodedStringValue temp;
-                for (int i = 0; i < addr.length; i++) {
-                    temp = appendAddressType(addr[i]);
+                for (EncodedStringValue encodedStringValue : addr) {
+                    temp = appendAddressType(encodedStringValue);
                     if (temp == null) {
                         return PDU_COMPOSE_CONTENT_ERROR;
                     }
@@ -1056,7 +1065,7 @@ public class PduComposer {
                 try {
                     final byte[] buffer = new byte[PDU_COMPOSER_BLOCK_SIZE];
                     cr = mResolver.openInputStream(part.getDataUri());
-                    int len = 0;
+                    int len;
                     while ((len = cr.read(buffer)) != -1) {
                         mMessage.write(buffer, 0, len);
                         mPosition += len;

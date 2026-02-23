@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +17,13 @@
 
 package com.android.messaging.ui.conversation;
 
-import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.DownloadManager;
-import android.app.Fragment;
-import android.app.FragmentManager;
-import android.app.FragmentTransaction;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
-import android.content.DialogInterface;
-import android.content.DialogInterface.OnCancelListener;
-import android.content.DialogInterface.OnClickListener;
-import android.content.DialogInterface.OnDismissListener;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
@@ -42,15 +35,10 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Parcelable;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
-import androidx.core.text.BidiFormatter;
-import androidx.core.text.TextDirectionHeuristicsCompat;
-import androidx.appcompat.app.ActionBar;
-import androidx.recyclerview.widget.DefaultItemAnimator;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.recyclerview.widget.RecyclerView.ViewHolder;
+import android.provider.MediaStore;
+import android.support.v7.mms.pdu.ContentType;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
 import android.view.ActionMode;
@@ -63,6 +51,23 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.TextView;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.text.BidiFormatter;
+import androidx.core.text.TextDirectionHeuristicsCompat;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
+import androidx.loader.app.LoaderManager;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.RecyclerView.ViewHolder;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.DataModel;
@@ -87,6 +92,7 @@ import com.android.messaging.ui.ConversationDrawables;
 import com.android.messaging.ui.SnackBar;
 import com.android.messaging.ui.UIIntents;
 import com.android.messaging.ui.animation.PopupTransitionAnimation;
+import com.android.messaging.ui.attachmentchooser.AttachmentChooserActivity;
 import com.android.messaging.ui.contact.AddContactsConfirmationDialog;
 import com.android.messaging.ui.conversation.ComposeMessageView.IComposeMessageViewHost;
 import com.android.messaging.ui.conversation.ConversationInputManager.ConversationInputHost;
@@ -96,20 +102,18 @@ import com.android.messaging.util.AccessibilityUtil;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.AvatarUriUtil;
 import com.android.messaging.util.ChangeDefaultSmsAppHelper;
-import com.android.messaging.util.ContentType;
 import com.android.messaging.util.ImeUtil;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
-import com.android.messaging.util.SafeAsyncTask;
 import com.android.messaging.util.TextUtil;
 import com.android.messaging.util.UiUtils;
 import com.android.messaging.util.UriUtil;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Shows a list of messages/parts comprising a conversation.
@@ -127,14 +131,11 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         ActionMode startActionMode(ActionMode.Callback callback);
         void dismissActionMode();
         ActionMode getActionMode();
-        void onConversationMessagesUpdated(int numberOfMessages);
-        void onConversationParticipantDataLoaded(int numberOfParticipants);
         boolean isActiveAndFocused();
     }
 
     public static final String FRAGMENT_TAG = "conversation";
 
-    static final int REQUEST_CHOOSE_ATTACHMENTS = 2;
     private static final int JUMP_SCROLL_THRESHOLD = 15;
     // We animate the message from draft to message list, if we the message doesn't show up in the
     // list within this time limit, then we just do a fade in animation instead
@@ -155,7 +156,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     // This binding keeps track of our associated ConversationData instance
     // A binding should have the lifetime of the owning component,
     //  don't recreate, unbind and bind if you need new data
-    @VisibleForTesting
     final Binding<ConversationData> mBinding = BindingBase.createBinding(this);
 
     // Saved Instance State Data - only for temporal data which is nice to maintain but not
@@ -164,13 +164,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     private Parcelable mListState;
 
     private ConversationFragmentHost mHost;
-
-    protected List<Integer> mFilterResults;
-
-    // The minimum scrolling distance between RecyclerView's scroll change event beyong which
-    // a fling motion is considered fast, in which case we'll delay load image attachments for
-    // perf optimization.
-    private int mFastFlingThreshold;
 
     // ConversationMessageView that is currently selected
     private ConversationMessageView mSelectedMessage;
@@ -245,7 +238,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
             private int mScrollState = RecyclerView.SCROLL_STATE_IDLE;
 
             @Override
-            public void onScrollStateChanged(final RecyclerView view, final int newState) {
+            public void onScrollStateChanged(@NonNull final RecyclerView view, final int newState) {
                 if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                     // Reset scroll states.
                     mCumulativeScrollDelta = 0;
@@ -257,7 +250,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
             }
 
             @Override
-            public void onScrolled(final RecyclerView view, final int dx, final int dy) {
+            public void onScrolled(@NonNull final RecyclerView view, final int dx, final int dy) {
                 if (mScrollState == RecyclerView.SCROLL_STATE_DRAGGING &&
                         !mScrollToDismissHandled) {
                     mCumulativeScrollDelta += dy;
@@ -308,67 +301,62 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         public boolean onActionItemClicked(final ActionMode actionMode, final MenuItem menuItem) {
             final ConversationMessageData data = mSelectedMessage.getData();
             final String messageId = data.getMessageId();
-            switch (menuItem.getItemId()) {
-                case R.id.save_attachment:
-                    if (OsUtil.hasStoragePermission()) {
-                        final SaveAttachmentTask saveAttachmentTask = new SaveAttachmentTask(
-                                getActivity());
-                        for (final MessagePartData part : data.getAttachments()) {
-                            saveAttachmentTask.addAttachmentToSave(part.getContentUri(),
-                                    part.getContentType());
-                        }
-                        if (saveAttachmentTask.getAttachmentCount() > 0) {
-                            saveAttachmentTask.executeOnThreadPool();
-                            mHost.dismissActionMode();
-                        }
-                    } else {
-                        getActivity().requestPermissions(
-                                new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, 0);
-                    }
-                    return true;
-                case R.id.action_delete_message:
-                    if (mSelectedMessage != null) {
-                        deleteMessage(messageId);
-                    }
-                    return true;
-                case R.id.action_download:
-                    if (mSelectedMessage != null) {
-                        retryDownload(messageId);
-                        mHost.dismissActionMode();
-                    }
-                    return true;
-                case R.id.action_send:
-                    if (mSelectedMessage != null) {
-                        retrySend(messageId);
-                        mHost.dismissActionMode();
-                    }
-                    return true;
-                case R.id.copy_text:
-                    Assert.isTrue(data.hasText());
-                    final ClipboardManager clipboard = (ClipboardManager) getActivity()
-                            .getSystemService(Context.CLIPBOARD_SERVICE);
-                    clipboard.setPrimaryClip(
-                            ClipData.newPlainText(null /* label */, data.getText()));
+            int itemId = menuItem.getItemId();
+            if (itemId == R.id.save_attachment) {
+                final SaveAttachmentTask saveAttachmentTask = new SaveAttachmentTask(
+                        getActivity());
+                for (final MessagePartData part : data.getAttachments()) {
+                    saveAttachmentTask.addAttachmentToSave(part.getContentUri(),
+                            part.getContentType());
+                }
+                if (saveAttachmentTask.getAttachmentCount() > 0) {
+                    saveAttachmentTask.execute();
                     mHost.dismissActionMode();
-                    return true;
-                case R.id.details_menu:
-                    MessageDetailsDialog.show(
-                            getActivity(), data, mBinding.getData().getParticipants(),
-                            mBinding.getData().getSelfParticipantById(data.getSelfParticipantId()));
+                }
+                return true;
+            } else if (itemId == R.id.action_delete_message) {
+                if (mSelectedMessage != null) {
+                    deleteMessage(messageId);
+                }
+                return true;
+            } else if (itemId == R.id.action_download) {
+                if (mSelectedMessage != null) {
+                    retryDownload(messageId);
                     mHost.dismissActionMode();
-                    return true;
-                case R.id.share_message_menu:
-                    shareMessage(data);
+                }
+                return true;
+            } else if (itemId == R.id.action_send) {
+                if (mSelectedMessage != null) {
+                    retrySend(messageId);
                     mHost.dismissActionMode();
-                    return true;
-                case R.id.forward_message_menu:
-                    // TODO: Currently we are forwarding one part at a time, instead of
-                    // the entire message. Change this to forwarding the entire message when we
-                    // use message-based cursor in conversation.
-                    final MessageData message = mBinding.getData().createForwardedMessage(data);
-                    UIIntents.get().launchForwardMessageActivity(getActivity(), message);
-                    mHost.dismissActionMode();
-                    return true;
+                }
+                return true;
+            } else if (itemId == R.id.copy_text) {
+                Assert.isTrue(data.hasText());
+                final ClipboardManager clipboard = (ClipboardManager) getActivity()
+                        .getSystemService(Context.CLIPBOARD_SERVICE);
+                clipboard.setPrimaryClip(
+                        ClipData.newPlainText(null /* label */, data.getText()));
+                mHost.dismissActionMode();
+                return true;
+            } else if (itemId == R.id.details_menu) {
+                MessageDetailsDialog.show(
+                        getActivity(), data, mBinding.getData().getParticipants(),
+                        mBinding.getData().getSelfParticipantById(data.getSelfParticipantId()));
+                mHost.dismissActionMode();
+                return true;
+            } else if (itemId == R.id.share_message_menu) {
+                shareMessage(data);
+                mHost.dismissActionMode();
+                return true;
+            } else if (itemId == R.id.forward_message_menu) {
+                // TODO: Currently we are forwarding one part at a time, instead of
+                // the entire message. Change this to forwarding the entire message when we
+                // use message-based cursor in conversation.
+                final MessageData message = mBinding.getData().createForwardedMessage(data);
+                UIIntents.get().launchForwardMessageActivity(getActivity(), message);
+                mHost.dismissActionMode();
+                return true;
             }
             return false;
         }
@@ -406,30 +394,41 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         }
     };
 
+    private final ActivityResultLauncher<Intent> mLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK) {
+                    final ConversationFragment conversationFragment = getConversationFragment();
+                    if (conversationFragment != null) {
+                        conversationFragment.onAttachmentChoosen();
+                    } else {
+                        LogUtil.e(LogUtil.BUGLE_TAG,
+                                "ConversationFragment is missing after launching " +
+                                        "AttachmentChooserActivity!");
+                    }
+                }
+            });
+
+    public ConversationFragment getConversationFragment() {
+        return (ConversationFragment) getParentFragmentManager().findFragmentByTag(
+                ConversationFragment.FRAGMENT_TAG);
+    }
+
     /**
      * {@inheritDoc} from Fragment
      */
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mFastFlingThreshold = getResources().getDimensionPixelOffset(
-                R.dimen.conversation_fast_fling_threshold);
         mAdapter = new ConversationMessageAdapter(getActivity(), null, this,
                 null,
                 // Sets the item click listener on the Recycler item views.
-                new View.OnClickListener() {
-                    @Override
-                    public void onClick(final View v) {
-                        final ConversationMessageView messageView = (ConversationMessageView) v;
-                        handleMessageClick(messageView);
-                    }
+                v -> {
+                    final ConversationMessageView messageView = (ConversationMessageView) v;
+                    handleMessageClick(messageView);
                 },
-                new View.OnLongClickListener() {
-                    @Override
-                    public boolean onLongClick(final View view) {
-                        selectMessage((ConversationMessageView) view);
-                        return true;
-                    }
+                view -> {
+                    selectMessage((ConversationMessageView) view);
+                    return true;
                 }
         );
     }
@@ -444,12 +443,12 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
      * loading when onActivityCreated() is called, which is guaranteed to happen after both.
      */
     @Override
-    public void onActivityCreated(final Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
+    public void onViewCreated(@NonNull View view, final Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
         // Delay showing the message list until the participant list is loaded.
         mRecyclerView.setVisibility(View.INVISIBLE);
         mBinding.ensureBound();
-        mBinding.getData().init(getLoaderManager(), mBinding);
+        mBinding.getData().init(LoaderManager.getInstance(this), mBinding);
 
         // Build the input manager with all its required dependencies and pass it along to the
         // compose message view.
@@ -507,14 +506,14 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     public View onCreateView(final LayoutInflater inflater, final ViewGroup container,
             final Bundle savedInstanceState) {
         final View view = inflater.inflate(R.layout.conversation_fragment, container, false);
-        mRecyclerView = (RecyclerView) view.findViewById(android.R.id.list);
+        mRecyclerView = view.findViewById(android.R.id.list);
         final LinearLayoutManager manager = new LinearLayoutManager(getActivity());
         manager.setStackFromEnd(true);
         manager.setReverseLayout(false);
         mRecyclerView.setHasFixedSize(true);
         mRecyclerView.setLayoutManager(manager);
         mRecyclerView.setItemAnimator(new DefaultItemAnimator() {
-            private final List<ViewHolder> mAddAnimations = new ArrayList<ViewHolder>();
+            private final List<ViewHolder> mAddAnimations = new ArrayList<>();
             private PopupTransitionAnimation mPopupTransitionAnimation;
 
             @Override
@@ -529,16 +528,14 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                         !data.getIsIncoming() &&
                         timeSinceSend < MESSAGE_ANIMATION_MAX_WAIT) {
                     final ConversationMessageBubbleView messageBubble =
-                            (ConversationMessageBubbleView) view
-                                    .findViewById(R.id.message_content);
+                            view.findViewById(R.id.message_content);
                     final Rect startRect = UiUtils.getMeasuredBoundsOnScreen(mComposeMessageView);
                     final View composeBubbleView = mComposeMessageView.findViewById(
                             R.id.compose_message_text);
                     final Rect composeBubbleRect =
                             UiUtils.getMeasuredBoundsOnScreen(composeBubbleView);
                     final AttachmentPreview attachmentView =
-                            (AttachmentPreview) mComposeMessageView.findViewById(
-                                    R.id.attachment_draft_view);
+                            mComposeMessageView.findViewById(R.id.attachment_draft_view);
                     final Rect attachmentRect = UiUtils.getMeasuredBoundsOnScreen(attachmentView);
                     if (attachmentView.getVisibility() == View.VISIBLE) {
                         startRect.top = attachmentRect.top;
@@ -548,27 +545,21 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                     startRect.top -= view.getPaddingTop();
                     startRect.bottom =
                             composeBubbleRect.bottom;
-                    startRect.left += view.getPaddingRight();
+                    startRect.left += view.getPaddingEnd();
 
                     view.setAlpha(0);
                     mPopupTransitionAnimation = new PopupTransitionAnimation(startRect, view);
-                    mPopupTransitionAnimation.setOnStartCallback(new Runnable() {
-                            @Override
-                            public void run() {
-                                final int startWidth = composeBubbleRect.width();
-                                attachmentView.onMessageAnimationStart();
-                                messageBubble.kickOffMorphAnimation(startWidth,
-                                        messageBubble.findViewById(R.id.message_text_and_info)
-                                        .getMeasuredWidth());
-                            }
-                        });
-                    mPopupTransitionAnimation.setOnStopCallback(new Runnable() {
-                            @Override
-                            public void run() {
-                                view.setAlpha(1);
-                                dispatchAddFinished(holder);
-                            }
-                        });
+                    mPopupTransitionAnimation.setOnStartCallback(() -> {
+                        final int startWidth = composeBubbleRect.width();
+                        attachmentView.onMessageAnimationStart();
+                        messageBubble.kickOffMorphAnimation(startWidth,
+                                messageBubble.findViewById(R.id.message_text_and_info)
+                                .getMeasuredWidth());
+                    });
+                    mPopupTransitionAnimation.setOnStopCallback(() -> {
+                        view.setAlpha(1);
+                        dispatchAddFinished(holder);
+                    });
                     mPopupTransitionAnimation.startAfterLayoutComplete();
                     mAddAnimations.add(holder);
                     return true;
@@ -600,7 +591,8 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         mRecyclerView.setAdapter(mAdapter);
 
         if (savedInstanceState != null) {
-            mListState = savedInstanceState.getParcelable(SAVED_INSTANCE_STATE_LIST_VIEW_STATE_KEY);
+            mListState = savedInstanceState.getParcelable(SAVED_INSTANCE_STATE_LIST_VIEW_STATE_KEY,
+                    Parcelable.class);
         }
 
         mConversationComposeDivider = view.findViewById(R.id.conversation_compose_divider);
@@ -610,8 +602,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                 UiUtils.isRtlMode() ? ConversationFastScroller.POSITION_LEFT_SIDE :
                     ConversationFastScroller.POSITION_RIGHT_SIDE);
 
-        mComposeMessageView = (ComposeMessageView)
-                view.findViewById(R.id.message_compose_view_container);
+        mComposeMessageView = view.findViewById(R.id.message_compose_view_container);
         // Bind the compose message view to the DraftMessageData
         mComposeMessageView.bind(DataModel.get().createDraftMessageData(
                 mBinding.getData().getConversationId()), this);
@@ -691,12 +682,16 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     }
 
     @Override
-    public void onSaveInstanceState(final Bundle outState) {
+    public void onSaveInstanceState(@NonNull final Bundle outState) {
         super.onSaveInstanceState(outState);
         if (mListState != null) {
             outState.putParcelable(SAVED_INSTANCE_STATE_LIST_VIEW_STATE_KEY, mListState);
         }
         mComposeMessageView.saveInputState(outState);
+    }
+
+    public void onRestart() {
+        mBinding.getData().restart(mBinding);
     }
 
     @Override
@@ -735,7 +730,8 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     }
 
     @Override
-    public void onCreateOptionsMenu(final Menu menu, final MenuInflater inflater) {
+    public void onCreateOptionsMenu(@NonNull final Menu menu,
+                                    @NonNull final MenuInflater inflater) {
         if (mHost.getActionMode() != null) {
             return;
         }
@@ -766,78 +762,66 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
 
     @Override
     public boolean onOptionsItemSelected(final MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.action_people_and_options:
-                Assert.isTrue(mBinding.getData().getParticipantsLoaded());
-                UIIntents.get().launchPeopleAndOptionsActivity(getActivity(), mConversationId);
-                return true;
-
-            case R.id.action_call:
-                final String phoneNumber = mBinding.getData().getParticipantPhoneNumber();
-                Assert.notNull(phoneNumber);
-                // Can't make a call to emergency numbers using ACTION_CALL.
-                if (PhoneNumberUtils.isEmergencyNumber(phoneNumber)) {
-                    UiUtils.showToast(R.string.disallow_emergency_call);
+        int itemId = item.getItemId();
+        if (itemId == R.id.action_people_and_options) {
+            Assert.isTrue(mBinding.getData().getParticipantsLoaded());
+            UIIntents.get().launchPeopleAndOptionsActivity(getActivity(), mConversationId);
+            return true;
+        } else if (itemId == R.id.action_call) {
+            final String phoneNumber = mBinding.getData().getParticipantPhoneNumber();
+            Assert.notNull(phoneNumber);
+            // Can't make a call to emergency numbers using ACTION_CALL.
+            if (PhoneNumberUtils.isEmergencyNumber(phoneNumber)) {
+                UiUtils.showToast(R.string.disallow_emergency_call);
+            } else {
+                final View targetView = getActivity().findViewById(R.id.action_call);
+                Point centerPoint;
+                if (targetView != null) {
+                    final int[] screenLocation = new int[2];
+                    targetView.getLocationOnScreen(screenLocation);
+                    final int centerX = screenLocation[0] + targetView.getWidth() / 2;
+                    final int centerY = screenLocation[1] + targetView.getHeight() / 2;
+                    centerPoint = new Point(centerX, centerY);
                 } else {
-                    final View targetView = getActivity().findViewById(R.id.action_call);
-                    Point centerPoint;
-                    if (targetView != null) {
-                        final int screenLocation[] = new int[2];
-                        targetView.getLocationOnScreen(screenLocation);
-                        final int centerX = screenLocation[0] + targetView.getWidth() / 2;
-                        final int centerY = screenLocation[1] + targetView.getHeight() / 2;
-                        centerPoint = new Point(centerX, centerY);
-                    } else {
-                        // In the overflow menu, just use the center of the screen.
-                        final Display display =
-                                getActivity().getWindowManager().getDefaultDisplay();
-                        centerPoint = new Point(display.getWidth() / 2, display.getHeight() / 2);
-                    }
-                    UIIntents.get()
-                            .launchPhoneCallActivity(getActivity(), phoneNumber, centerPoint);
+                    // In the overflow menu, just use the center of the screen.
+                    final Display display =
+                            getActivity().getWindowManager().getDefaultDisplay();
+                    centerPoint = new Point(display.getWidth() / 2, display.getHeight() / 2);
                 }
-                return true;
-
-            case R.id.action_archive:
-                mBinding.getData().archiveConversation(mBinding);
-                closeConversation(mConversationId);
-                return true;
-
-            case R.id.action_unarchive:
-                mBinding.getData().unarchiveConversation(mBinding);
-                return true;
-
-            case R.id.action_settings:
-                return true;
-
-            case R.id.action_add_contact:
-                final ParticipantData participant = mBinding.getData().getOtherParticipant();
-                Assert.notNull(participant);
-                final String destination = participant.getNormalizedDestination();
-                final Uri avatarUri = AvatarUriUtil.createAvatarUri(participant);
-                (new AddContactsConfirmationDialog(getActivity(), avatarUri, destination)).show();
-                return true;
-
-            case R.id.action_delete:
-                if (isReadyForAction()) {
-                    new AlertDialog.Builder(getActivity())
-                            .setTitle(getResources().getQuantityString(
-                                    R.plurals.delete_conversations_confirmation_dialog_title, 1))
-                            .setPositiveButton(R.string.delete_conversation_confirmation_button,
-                                    new DialogInterface.OnClickListener() {
-                                        @Override
-                                        public void onClick(final DialogInterface dialog,
-                                                final int button) {
-                                            deleteConversation();
-                                        }
-                            })
-                            .setNegativeButton(R.string.delete_conversation_decline_button, null)
-                            .show();
-                } else {
-                    warnOfMissingActionConditions(false /*sending*/,
-                            null /*commandToRunAfterActionConditionResolved*/);
-                }
-                return true;
+                UIIntents.get()
+                        .launchPhoneCallActivity(getActivity(), phoneNumber, centerPoint);
+            }
+            return true;
+        } else if (itemId == R.id.action_archive) {
+            mBinding.getData().archiveConversation(mBinding);
+            closeConversation(mConversationId);
+            return true;
+        } else if (itemId == R.id.action_unarchive) {
+            mBinding.getData().unarchiveConversation(mBinding);
+            return true;
+        } else if (itemId == R.id.action_settings) {
+            return true;
+        } else if (itemId == R.id.action_add_contact) {
+            final ParticipantData participant = mBinding.getData().getOtherParticipant();
+            Assert.notNull(participant);
+            final String destination = participant.getNormalizedDestination();
+            final Uri avatarUri = AvatarUriUtil.createAvatarUri(participant);
+            (new AddContactsConfirmationDialog(getActivity(), avatarUri, destination)).show();
+            return true;
+        } else if (itemId == R.id.action_delete) {
+            if (isReadyForDeleteAction()) {
+                new AlertDialog.Builder(getActivity(), R.style.AlertDialogTheme)
+                        .setTitle(getResources().getQuantityString(
+                                R.plurals.delete_conversations_confirmation_dialog_title, 1))
+                        .setPositiveButton(R.string.delete_conversation_confirmation_button,
+                                (dialog, button) -> deleteConversation())
+                        .setNegativeButton(R.string.delete_conversation_decline_button, null)
+                        .show();
+            } else {
+                warnOfMissingActionConditions(false /*sending*/,
+                        null /*commandToRunAfterActionConditionResolved*/);
+            }
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
@@ -891,12 +875,9 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                     UiUtils.showSnackBarWithCustomAction(getActivity(),
                             getView().getRootView(),
                             getString(R.string.in_conversation_notify_new_message_text),
-                            SnackBar.Action.createCustomAction(new Runnable() {
-                                @Override
-                                public void run() {
-                                    scrollToBottom(true /* smoothScroll */);
-                                    mComposeMessageView.hideAllComposeInputs(false /* animate */);
-                                }
+                            SnackBar.Action.createCustomAction(() -> {
+                                scrollToBottom(true /* smoothScroll */);
+                                mComposeMessageView.hideAllComposeInputs(false /* animate */);
                             },
                             getString(R.string.in_conversation_notify_new_message_action)),
                             null /* interactions */,
@@ -912,16 +893,12 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         }
 
         if (cursor != null) {
-            mHost.onConversationMessagesUpdated(cursor.getCount());
-
             // Are we coming from a widget click where we're told to scroll to a particular item?
             final int scrollToPos = getScrollToMessagePosition();
             if (scrollToPos >= 0) {
-                if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-                    LogUtil.v(LogUtil.BUGLE_TAG, "onConversationMessagesCursorUpdated " +
-                            " scrollToPos: " + scrollToPos +
-                            " cursorCount: " + cursor.getCount());
-                }
+                LogUtil.v(LogUtil.BUGLE_TAG, "onConversationMessagesCursorUpdated " +
+                        " scrollToPos: " + scrollToPos +
+                        " cursorCount: " + cursor.getCount());
                 scrollToPosition(scrollToPos, true /*smoothScroll*/);
                 clearScrollToMessagePosition();
             }
@@ -1001,7 +978,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     }
 
     @Override
-    public void onConfigurationChanged(final Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull final Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         mRecyclerView.getItemAnimator().endAnimations();
     }
@@ -1012,7 +989,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     }
 
     private FragmentManager getFragmentManagerToUse() {
-        return OsUtil.isAtLeastJB_MR1() ? getChildFragmentManager() : getFragmentManager();
+        return getChildFragmentManager();
     }
 
     public MediaPicker getMediaPicker() {
@@ -1033,13 +1010,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                 LogUtil.w(LogUtil.BUGLE_TAG, "Message can't be sent: conv participants not loaded");
             }
         } else {
-            warnOfMissingActionConditions(true /*sending*/,
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            sendMessage(message);
-                        }
-            });
+            warnOfMissingActionConditions(true /*sending*/, () -> sendMessage(message));
         }
     }
 
@@ -1071,6 +1042,10 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     @Override
     public boolean isReadyForAction() {
         return UiUtils.isReadyForAction();
+    }
+
+    public boolean isReadyForDeleteAction() {
+        return UiUtils.isReadyForDeleteAction();
     }
 
     /**
@@ -1130,45 +1105,20 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                 mBinding.getData().resendMessage(mBinding, messageId);
             }
         } else {
-            warnOfMissingActionConditions(true /*sending*/,
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            retrySend(messageId);
-                        }
-
-                    });
+            warnOfMissingActionConditions(true /*sending*/, () -> retrySend(messageId));
         }
     }
 
     void deleteMessage(final String messageId) {
-        if (isReadyForAction()) {
+        if (isReadyForDeleteAction()) {
             final AlertDialog.Builder builder = new AlertDialog.Builder(getActivity())
                     .setTitle(R.string.delete_message_confirmation_dialog_title)
                     .setMessage(R.string.delete_message_confirmation_dialog_text)
                     .setPositiveButton(R.string.delete_message_confirmation_button,
-                            new OnClickListener() {
-                        @Override
-                        public void onClick(final DialogInterface dialog, final int which) {
-                            mBinding.getData().deleteMessage(mBinding, messageId);
-                        }
-                    })
+                            (dialog, which) ->
+                                    mBinding.getData().deleteMessage(mBinding, messageId))
                     .setNegativeButton(android.R.string.cancel, null);
-            if (OsUtil.isAtLeastJB_MR1()) {
-                builder.setOnDismissListener(new OnDismissListener() {
-                    @Override
-                    public void onDismiss(final DialogInterface dialog) {
-                        mHost.dismissActionMode();
-                    }
-                });
-            } else {
-                builder.setOnCancelListener(new OnCancelListener() {
-                    @Override
-                    public void onCancel(final DialogInterface dialog) {
-                        mHost.dismissActionMode();
-                    }
-                });
-            }
+            builder.setOnDismissListener(dialog -> mHost.dismissActionMode());
             builder.create().show();
         } else {
             warnOfMissingActionConditions(false /*sending*/,
@@ -1178,7 +1128,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     }
 
     public void deleteConversation() {
-        if (isReadyForAction()) {
+        if (isReadyForDeleteAction()) {
             final Context context = getActivity();
             mBinding.getData().deleteConversation(mBinding);
             closeConversation(mConversationId);
@@ -1209,8 +1159,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
             mHost.invalidateActionBar();
 
             mRecyclerView.setVisibility(View.VISIBLE);
-            mHost.onConversationParticipantDataLoaded
-                (mBinding.getData().getNumberOfParticipantsExcludingSelf());
         }
     }
 
@@ -1227,19 +1175,11 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
             ImeUtil.hideSoftInput(getActivity(), mComposeMessageView);
         }
 
-        final FragmentTransaction ft = getActivity().getFragmentManager().beginTransaction();
+        final FragmentTransaction ft = getActivity().getSupportFragmentManager().beginTransaction();
         final EnterSelfPhoneNumberDialog dialog = EnterSelfPhoneNumberDialog
                 .newInstance(getConversationSelfSubId());
         dialog.setTargetFragment(this, 0/*requestCode*/);
         dialog.show(ft, null/*tag*/);
-    }
-
-    @Override
-    public void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
-        if (mChangeDefaultSmsAppHelper == null) {
-            mChangeDefaultSmsAppHelper = new ChangeDefaultSmsAppHelper();
-        }
-        mChangeDefaultSmsAppHelper.handleChangeDefaultSmsResult(requestCode, resultCode, null);
     }
 
     public boolean hasMessages() {
@@ -1316,8 +1256,10 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         }
     }
 
-    public static class SaveAttachmentTask extends SafeAsyncTask<Void, Void, Void> {
+    public static class SaveAttachmentTask {
         private final Context mContext;
+        private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
+        private final Handler mHandler = new Handler(Looper.getMainLooper());
         private final List<AttachmentToSave> mAttachmentsToSave = new ArrayList<>();
 
         public SaveAttachmentTask(final Context context, final Uri contentUri,
@@ -1338,24 +1280,34 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
             return mAttachmentsToSave.size();
         }
 
-        @Override
-        protected Void doInBackgroundTimed(final Void... arg) {
-            final File appDir = new File(Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_PICTURES),
-                    mContext.getResources().getString(R.string.app_name));
-            final File downloadDir = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOWNLOADS);
+        public void execute() {
+            mExecutor.execute(() -> {
+                onExecute();
+                mHandler.post(this::onPostExecute);
+            });
+        }
+
+        protected void onExecute() {
+            final String appDir = Environment.DIRECTORY_PICTURES
+                    + File.separator
+                    + mContext.getResources().getString(R.string.app_name);
+            final String downloadDir = Environment.DIRECTORY_DOWNLOADS;
+            final ContentResolver resolver = mContext.getContentResolver();
             for (final AttachmentToSave attachment : mAttachmentsToSave) {
                 final boolean isImageOrVideo = ContentType.isImageType(attachment.contentType)
                         || ContentType.isVideoType(attachment.contentType);
-                attachment.persistedUri = UriUtil.persistContent(attachment.uri,
-                        isImageOrVideo ? appDir : downloadDir, attachment.contentType);
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.MediaColumns.MIME_TYPE, attachment.contentType);
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH, isImageOrVideo ?
+                        appDir : downloadDir);
+                attachment.persistedUri = resolver.insert(isImageOrVideo
+                        ? MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                        : MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                UriUtil.persistContent(mContext, attachment.uri, attachment.persistedUri);
            }
-            return null;
         }
 
-        @Override
-        protected void onPostExecute(final Void result) {
+        protected void onPostExecute() {
             int failCount = 0;
             int imageCount = 0;
             int videoCount = 0;
@@ -1366,35 +1318,12 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                    continue;
                 }
 
-                // Inform MediaScanner about the new file
-                final Intent scanFileIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-                scanFileIntent.setData(attachment.persistedUri);
-                mContext.sendBroadcast(scanFileIntent);
-
                 if (ContentType.isImageType(attachment.contentType)) {
                     imageCount++;
                 } else if (ContentType.isVideoType(attachment.contentType)) {
                     videoCount++;
                 } else {
                     otherCount++;
-                    // Inform DownloadManager of the file so it will show in the "downloads" app
-                    final DownloadManager downloadManager =
-                            (DownloadManager) mContext.getSystemService(
-                                    Context.DOWNLOAD_SERVICE);
-                    final String filePath = attachment.persistedUri.getPath();
-                    final File file = new File(filePath);
-
-                    if (file.exists()) {
-                        downloadManager.addCompletedDownload(
-                                file.getName() /* title */,
-                                mContext.getString(
-                                        R.string.attachment_file_description) /* description */,
-                                        true /* isMediaScannerScannable */,
-                                        attachment.contentType,
-                                        file.getAbsolutePath(),
-                                        file.length(),
-                                        false /* showNotification */);
-                    }
                 }
             }
 
@@ -1481,7 +1410,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
 
     @Override
     public SimSelectorView getSimSelectorView() {
-        return (SimSelectorView) getView().findViewById(R.id.sim_selector);
+        return getView().findViewById(R.id.sim_selector);
     }
 
     @Override
@@ -1500,7 +1429,7 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                 getActivity(), tooManyVideos);
     }
 
-    public static void warnOfExceedingMessageLimit(final boolean sending,
+    public void warnOfExceedingMessageLimit(final boolean sending,
             final ComposeMessageView composeMessageView, final String conversationId,
             final Activity activity, final boolean tooManyVideos) {
         final AlertDialog.Builder builder =
@@ -1513,19 +1442,11 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
             } else {
                 builder.setMessage(R.string.attachment_limit_reached_dialog_message_when_sending)
                         .setNegativeButton(R.string.attachment_limit_reached_send_anyway,
-                                new OnClickListener() {
-                                    @Override
-                                    public void onClick(final DialogInterface dialog,
-                                            final int which) {
-                                        composeMessageView.sendMessageIgnoreMessageSizeLimit();
-                                    }
-                                });
+                                (dialog, which) ->
+                                        composeMessageView.sendMessageIgnoreMessageSizeLimit());
             }
-            builder.setPositiveButton(android.R.string.ok, new OnClickListener() {
-                @Override
-                public void onClick(final DialogInterface dialog, final int which) {
-                    showAttachmentChooser(conversationId, activity);
-                }});
+            builder.setPositiveButton(android.R.string.ok, (dialog, which) ->
+                    showAttachmentChooser(conversationId, activity));
         } else {
             builder.setMessage(R.string.attachment_limit_reached_dialog_message_when_composing)
                     .setPositiveButton(android.R.string.ok, null);
@@ -1538,10 +1459,11 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
         showAttachmentChooser(mConversationId, getActivity());
     }
 
-    public static void showAttachmentChooser(final String conversationId,
+    public void showAttachmentChooser(final String conversationId,
             final Activity activity) {
-        UIIntents.get().launchAttachmentChooserActivity(activity,
-                conversationId, REQUEST_CHOOSE_ATTACHMENTS);
+        final Intent intent = new Intent(activity, AttachmentChooserActivity.class);
+        intent.putExtra(UIIntents.UI_INTENT_EXTRA_CONVERSATION_ID, conversationId);
+        mLauncher.launch(intent);
     }
 
     private void updateActionAndStatusBarColor(final ActionBar actionBar) {
@@ -1564,17 +1486,11 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
                 final LayoutInflater inflator = (LayoutInflater)
                         getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
                 customView = inflator.inflate(R.layout.action_bar_conversation_name, null);
-                customView.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(final View v) {
-                        onBackPressed();
-                    }
-                });
+                customView.setOnClickListener(v -> onBackPressed());
                 actionBar.setCustomView(customView);
             }
 
-            final TextView conversationNameView =
-                    (TextView) customView.findViewById(R.id.conversation_title);
+            final TextView conversationNameView = customView.findViewById(R.id.conversation_title);
             final String conversationName = getConversationName();
             if (!TextUtils.isEmpty(conversationName)) {
                 // RTL : To format conversation title if it happens to be phone numbers.
@@ -1620,11 +1536,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     }
 
     @Override
-    public void showHideSimSelector(final boolean show) {
-        // no-op for now
-    }
-
-    @Override
     public int getSimSelectorItemLayoutId() {
         return R.layout.sim_selector_item_view;
     }
@@ -1637,11 +1548,6 @@ public class ConversationFragment extends Fragment implements ConversationDataLi
     @Override
     public int overrideCounterColor() {
         return -1;      // don't override the color
-    }
-
-    @Override
-    public void onAttachmentsChanged(final boolean haveAttachments) {
-        // no-op for now
     }
 
     @Override

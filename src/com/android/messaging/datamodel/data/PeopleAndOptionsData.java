@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +17,18 @@
 
 package com.android.messaging.datamodel.data;
 
-import android.app.LoaderManager;
 import android.content.Context;
-import android.content.Loader;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 
+import androidx.annotation.NonNull;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.content.Loader;
+
 import com.android.messaging.datamodel.BoundCursorLoader;
 import com.android.messaging.datamodel.MessagingContentProvider;
 import com.android.messaging.datamodel.action.BugleActionToasts;
-import com.android.messaging.datamodel.action.UpdateConversationOptionsAction;
 import com.android.messaging.datamodel.action.UpdateDestinationBlockedAction;
 import com.android.messaging.datamodel.binding.BindableData;
 import com.android.messaging.datamodel.binding.BindingBase;
@@ -64,6 +66,7 @@ public class PeopleAndOptionsData extends BindableData implements
     private static final int CONVERSATION_OPTIONS_LOADER = 1;
     private static final int PARTICIPANT_LOADER = 2;
 
+    @NonNull
     @Override
     public Loader<Cursor> onCreateLoader(final int id, final Bundle args) {
         final String bindingId = args.getString(BINDING_ID);
@@ -74,7 +77,7 @@ public class PeopleAndOptionsData extends BindableData implements
                     final Uri uri =
                             MessagingContentProvider.buildConversationMetadataUri(mConversationId);
                     return new BoundCursorLoader(bindingId, mContext, uri,
-                            PeopleOptionsItemData.PROJECTION, null, null, null);
+                            new String[]{}, null, null, null);
                 }
 
                 case PARTICIPANT_LOADER: {
@@ -99,7 +102,7 @@ public class PeopleAndOptionsData extends BindableData implements
      * {@inheritDoc}
      */
     @Override
-    public void onLoadFinished(final Loader<Cursor> loader, final Cursor data) {
+    public void onLoadFinished(@NonNull final Loader<Cursor> loader, final Cursor data) {
         final BoundCursorLoader cursorLoader = (BoundCursorLoader) loader;
         if (isBound(cursorLoader.getBindingId())) {
             switch (loader.getId()) {
@@ -127,7 +130,7 @@ public class PeopleAndOptionsData extends BindableData implements
      * {@inheritDoc}
      */
     @Override
-    public void onLoaderReset(final Loader<Cursor> loader) {
+    public void onLoaderReset(@NonNull final Loader<Cursor> loader) {
         final BoundCursorLoader cursorLoader = (BoundCursorLoader) loader;
         if (isBound(cursorLoader.getBindingId())) {
             switch (loader.getId()) {
@@ -169,33 +172,6 @@ public class PeopleAndOptionsData extends BindableData implements
         }
     }
 
-    public void enableConversationNotifications(final BindingBase<PeopleAndOptionsData> binding,
-            final boolean enable) {
-        final String bindingId = binding.getBindingId();
-        if (isBound(bindingId)) {
-            UpdateConversationOptionsAction.enableConversationNotifications(
-                    mConversationId, enable);
-        }
-    }
-
-    public void setConversationNotificationSound(final BindingBase<PeopleAndOptionsData> binding,
-            final String ringtoneUri) {
-        final String bindingId = binding.getBindingId();
-        if (isBound(bindingId)) {
-            UpdateConversationOptionsAction.setConversationNotificationSound(mConversationId,
-                    ringtoneUri);
-        }
-    }
-
-    public void enableConversationNotificationVibration(
-            final BindingBase<PeopleAndOptionsData> binding, final boolean enable) {
-        final String bindingId = binding.getBindingId();
-        if (isBound(bindingId)) {
-            UpdateConversationOptionsAction.enableVibrationForConversationNotification(
-                    mConversationId, enable);
-        }
-    }
-
     public void setDestinationBlocked(final BindingBase<PeopleAndOptionsData> binding,
             final boolean blocked) {
         final String bindingId = binding.getBindingId();
@@ -206,5 +182,9 @@ public class PeopleAndOptionsData extends BindableData implements
                     blocked, mConversationId,
                     BugleActionToasts.makeUpdateDestinationBlockedActionListener(mContext));
         }
+    }
+
+    public String getConversationId() {
+        return mConversationId;
     }
 }

@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2008 Esmertec AG.
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +22,10 @@ import android.content.ContentUris;
 import android.content.UriMatcher;
 import android.net.Uri;
 import android.provider.Telephony.Mms;
-import androidx.collection.SimpleArrayMap;
 import android.util.Log;
 import android.util.SparseArray;
+
+import androidx.collection.SimpleArrayMap;
 
 import java.util.HashSet;
 
@@ -64,7 +66,7 @@ public final class PduCache extends AbstractCache<Uri, PduCacheEntry> {
         URI_MATCHER.addURI("mms-sms", "conversations",   MMS_CONVERSATION);
         URI_MATCHER.addURI("mms-sms", "conversations/#", MMS_CONVERSATION_ID);
 
-        MATCH_TO_MSGBOX_ID_MAP = new SparseArray<Integer>();
+        MATCH_TO_MSGBOX_ID_MAP = new SparseArray<>();
         MATCH_TO_MSGBOX_ID_MAP.put(MMS_INBOX,  Mms.MESSAGE_BOX_INBOX);
         MATCH_TO_MSGBOX_ID_MAP.put(MMS_SENT,   Mms.MESSAGE_BOX_SENT);
         MATCH_TO_MSGBOX_ID_MAP.put(MMS_DRAFTS, Mms.MESSAGE_BOX_DRAFTS);
@@ -76,12 +78,12 @@ public final class PduCache extends AbstractCache<Uri, PduCacheEntry> {
     private final HashSet<Uri> mUpdating;
 
     private PduCache() {
-        mMessageBoxes = new SparseArray<HashSet<Uri>>();
-        mThreads = new SimpleArrayMap<Long, HashSet<Uri>>();
-        mUpdating = new HashSet<Uri>();
+        mMessageBoxes = new SparseArray<>();
+        mThreads = new SimpleArrayMap<>();
+        mUpdating = new HashSet<>();
     }
 
-    public static final synchronized PduCache getInstance() {
+    public static synchronized PduCache getInstance() {
         if (sInstance == null) {
             if (LOCAL_LOGV) {
                 Log.v(TAG, "Constructing new PduCache instance.");
@@ -96,14 +98,14 @@ public final class PduCache extends AbstractCache<Uri, PduCacheEntry> {
         int msgBoxId = entry.getMessageBox();
         HashSet<Uri> msgBox = mMessageBoxes.get(msgBoxId);
         if (msgBox == null) {
-            msgBox = new HashSet<Uri>();
+            msgBox = new HashSet<>();
             mMessageBoxes.put(msgBoxId, msgBox);
         }
 
         long threadId = entry.getThreadId();
         HashSet<Uri> thread = mThreads.get(threadId);
         if (thread == null) {
-            thread = new HashSet<Uri>();
+            thread = new HashSet<>();
             mThreads.put(threadId, thread);
         }
 
@@ -186,7 +188,7 @@ public final class PduCache extends AbstractCache<Uri, PduCacheEntry> {
      */
     private Uri normalizeKey(Uri uri) {
         int match = URI_MATCHER.match(uri);
-        Uri normalizedKey = null;
+        Uri normalizedKey;
 
         switch (match) {
             case MMS_ALL_ID:

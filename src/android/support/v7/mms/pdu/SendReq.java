@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007-2008 Esmertec AG.
  * Copyright (C) 2007-2008 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +16,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms.pdu;
+package android.support.v7.mms.pdu;
 
 import android.util.Log;
 
@@ -82,7 +83,7 @@ public class SendReq extends MultimediaMessagePdu {
      * @param headers Headers for this PDU.
      * @param body Body of this PDu.
      */
-    SendReq(PduHeaders headers, PduBody body) {
+    public SendReq(PduHeaders headers, PduBody body) {
         super(headers, body);
     }
 

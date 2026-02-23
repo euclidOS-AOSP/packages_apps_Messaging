@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +23,6 @@ import android.net.Uri;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
-import android.view.View;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.data.ParticipantData;
@@ -57,7 +57,7 @@ public class ContactIconView extends AsyncImageView {
         final Resources resources = context.getResources();
         final TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.ContactIconView);
 
-        final int iconSizeId = a.getInt(R.styleable.ContactIconView_iconSize, 0);
+        final int iconSizeId = a.getInt(R.styleable.ContactIconView_contactIconSize, 0);
         switch (iconSizeId) {
             case NORMAL_ICON_SIZE_ID:
                 mIconSize = (int) resources.getDimension(
@@ -76,7 +76,8 @@ public class ContactIconView extends AsyncImageView {
                 mIconSize = 0;
                 Assert.fail("Unsupported ContactIconView icon size attribute");
         }
-        mColorPressedId = resources.getColor(R.color.contact_avatar_pressed_color);
+        mColorPressedId = resources.getColor(R.color.contact_avatar_pressed_color,
+                context.getTheme());
 
         setImage(null);
         a.recycle();
@@ -134,13 +135,8 @@ public class ContactIconView extends AsyncImageView {
                 && !TextUtils.isEmpty(mContactLookupKey)) ||
                 !TextUtils.isEmpty(mNormalizedDestination)) {
             if (!mDisableClickHandler) {
-                setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(final View view) {
-                        ContactUtil.showOrAddContact(view, mContactId, mContactLookupKey,
-                                mAvatarUri, mNormalizedDestination);
-                    }
-                });
+                setOnClickListener(view -> ContactUtil.showOrAddContact(view, mContactId,
+                        mContactLookupKey, mAvatarUri, mNormalizedDestination));
             }
         } else {
             // This should happen when the phone number is not in the user's contacts or it is a

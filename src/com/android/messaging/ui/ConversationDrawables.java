@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +18,10 @@ package com.android.messaging.ui;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.graphics.drawable.Drawable;
+
+import androidx.core.content.res.ResourcesCompat;
 
 import com.android.messaging.Factory;
 import com.android.messaging.R;
@@ -32,9 +36,6 @@ public class ConversationDrawables {
 
     // Cache the color filtered bubble drawables so that we don't need to create a
     // new one for each ConversationMessageView.
-    private Drawable mIncomingBubbleDrawable;
-    private Drawable mOutgoingBubbleDrawable;
-    private Drawable mIncomingErrorBubbleDrawable;
     private Drawable mIncomingBubbleNoArrowDrawable;
     private Drawable mOutgoingBubbleNoArrowDrawable;
     private Drawable mAudioPlayButtonDrawable;
@@ -52,6 +53,7 @@ public class ConversationDrawables {
     private int mIncomingAudioButtonColor;
     private int mSelectedBubbleColor;
     private int mThemeColor;
+    private TypedArray mColors;
 
     public static ConversationDrawables get() {
         if (sInstance == null) {
@@ -72,49 +74,44 @@ public class ConversationDrawables {
 
     public void updateDrawables() {
         final Resources resources = mContext.getResources();
+        final Resources.Theme theme = mContext.getTheme();
 
-        mIncomingBubbleDrawable = resources.getDrawable(R.drawable.msg_bubble_incoming);
-        mIncomingBubbleNoArrowDrawable =
-                resources.getDrawable(R.drawable.message_bubble_incoming_no_arrow);
-        mIncomingErrorBubbleDrawable = resources.getDrawable(R.drawable.msg_bubble_error);
-        mOutgoingBubbleDrawable =  resources.getDrawable(R.drawable.msg_bubble_outgoing);
-        mOutgoingBubbleNoArrowDrawable =
-                resources.getDrawable(R.drawable.message_bubble_outgoing_no_arrow);
-        mAudioPlayButtonDrawable = resources.getDrawable(R.drawable.ic_audio_play);
-        mAudioPauseButtonDrawable = resources.getDrawable(R.drawable.ic_audio_pause);
-        mIncomingAudioProgressBackgroundDrawable =
-                resources.getDrawable(R.drawable.audio_progress_bar_background_incoming);
-        mOutgoingAudioProgressBackgroundDrawable =
-                resources.getDrawable(R.drawable.audio_progress_bar_background_outgoing);
-        mAudioProgressForegroundDrawable =
-                resources.getDrawable(R.drawable.audio_progress_bar_progress);
-        mFastScrollThumbDrawable = resources.getDrawable(R.drawable.fastscroll_thumb);
-        mFastScrollThumbPressedDrawable =
-                resources.getDrawable(R.drawable.fastscroll_thumb_pressed);
-        mFastScrollPreviewDrawableLeft =
-                resources.getDrawable(R.drawable.fastscroll_preview_left);
-        mFastScrollPreviewDrawableRight =
-                resources.getDrawable(R.drawable.fastscroll_preview_right);
-        mOutgoingBubbleColor = resources.getColor(R.color.message_bubble_color_outgoing);
+        mIncomingBubbleNoArrowDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.message_bubble_incoming_no_arrow, theme);
+        mOutgoingBubbleNoArrowDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.message_bubble_outgoing_no_arrow, theme);
+        mAudioPlayButtonDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.ic_play_light, theme);
+        mAudioPauseButtonDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.ic_pause_light, theme);
+        mIncomingAudioProgressBackgroundDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.audio_progress_bar_background_incoming, theme);
+        mOutgoingAudioProgressBackgroundDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.audio_progress_bar_background_outgoing, theme);
+        mAudioProgressForegroundDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.audio_progress_bar_progress, theme);
+        mFastScrollThumbDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.fastscroll_thumb, theme);
+        mFastScrollThumbPressedDrawable = ResourcesCompat.getDrawable(resources,
+                R.drawable.fastscroll_thumb_pressed, theme);
+        mFastScrollPreviewDrawableLeft = ResourcesCompat.getDrawable(resources,
+                R.drawable.fastscroll_preview_left, theme);
+        mFastScrollPreviewDrawableRight = ResourcesCompat.getDrawable(resources,
+                R.drawable.fastscroll_preview_right, theme);
+        mOutgoingBubbleColor = resources.getColor(R.color.message_bubble_color_outgoing, theme);
         mIncomingErrorBubbleColor =
-                resources.getColor(R.color.message_error_bubble_color_incoming);
+                resources.getColor(R.color.message_error_bubble_color_incoming, theme);
         mIncomingAudioButtonColor =
-                resources.getColor(R.color.message_audio_button_color_incoming);
-        mSelectedBubbleColor = resources.getColor(R.color.message_bubble_color_selected);
-        mThemeColor = resources.getColor(R.color.primary_color);
+                resources.getColor(R.color.message_audio_button_color_incoming, theme);
+        mSelectedBubbleColor = resources.getColor(R.color.message_bubble_color_selected, theme);
+        mThemeColor = resources.getColor(R.color.primary_color, theme);
+        mColors = resources.obtainTypedArray(R.array.letter_tile_colors);
     }
 
     public Drawable getBubbleDrawable(final boolean selected, final boolean incoming,
-            final boolean needArrow, final boolean isError) {
+                                      final boolean isError, final String identifier) {
         final Drawable protoDrawable;
-        if (needArrow) {
-            if (incoming) {
-                protoDrawable = isError && !selected ?
-                        mIncomingErrorBubbleDrawable : mIncomingBubbleDrawable;
-            } else {
-                protoDrawable = mOutgoingBubbleDrawable;
-            }
-        } else if (incoming) {
+        if (incoming) {
             protoDrawable = mIncomingBubbleNoArrowDrawable;
         } else {
             protoDrawable = mOutgoingBubbleNoArrowDrawable;
@@ -127,7 +124,13 @@ public class ConversationDrawables {
             if (isError) {
                 color = mIncomingErrorBubbleColor;
             } else {
-                color = mThemeColor;
+                if (identifier != null &&
+                        mContext.getResources().getBoolean(R.bool.contact_colors)) {
+                    int idcolor = Math.abs(identifier.hashCode()) % mColors.length();
+                    color = mColors.getColor(idcolor, mThemeColor);
+                } else {
+                    color = mThemeColor;
+                }
             }
         } else {
             color = mOutgoingBubbleColor;

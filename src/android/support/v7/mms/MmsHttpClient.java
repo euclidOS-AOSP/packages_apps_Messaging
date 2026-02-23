@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.content.Context;
 import android.os.Bundle;
@@ -32,7 +33,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
@@ -40,6 +40,7 @@ import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.Proxy;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -194,7 +195,7 @@ public class MmsHttpClient {
             final InputStream in = new BufferedInputStream(connection.getInputStream());
             final ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             final byte[] buf = new byte[4096];
-            int count = 0;
+            int count;
             while ((count = in.read(buf)) > 0) {
                 byteOut.write(buf, 0, count);
             }
@@ -233,7 +234,7 @@ public class MmsHttpClient {
                     }
                 }
             }
-            Log.v(MmsService.TAG, "HTTP: headers\n" + sb.toString());
+            Log.v(MmsService.TAG, "HTTP: headers\n" + sb);
         }
     }
 
@@ -348,9 +349,9 @@ public class MmsHttpClient {
                 CarrierConfigValuesLoader.CONFIG_HTTP_PARAMS);
         if (!TextUtils.isEmpty(extraHttpParams)) {
             // Parse the parameter list
-            String paramList[] = extraHttpParams.split("\\|");
+            String[] paramList = extraHttpParams.split("\\|");
             for (String paramPair : paramList) {
-                String splitPair[] = paramPair.split(":", 2);
+                String[] splitPair = paramPair.split(":", 2);
                 if (splitPair.length == 2) {
                     final String name = splitPair[0].trim();
                     final String value = resolveMacro(splitPair[1].trim(), mmsConfig);
@@ -391,17 +392,13 @@ public class MmsHttpClient {
      * @return the phone number text
      */
     private String getSelfNumber() {
-        if (Utils.supportMSim()) {
-            final SubscriptionManager subscriptionManager = SubscriptionManager.from(mContext);
-            final SubscriptionInfo info = subscriptionManager.getActiveSubscriptionInfo(
-                    SmsManager.getDefaultSmsSubscriptionId());
-            if (info != null) {
-                return info.getNumber();
-            } else {
-                return null;
-            }
+        final SubscriptionManager subscriptionManager = SubscriptionManager.from(mContext);
+        final SubscriptionInfo info = subscriptionManager.getActiveSubscriptionInfo(
+                SmsManager.getDefaultSmsSubscriptionId());
+        if (info != null) {
+            return info.getNumber();
         } else {
-            return mTelephonyManager.getLine1Number();
+            return null;
         }
     }
 
@@ -412,15 +409,11 @@ public class MmsHttpClient {
      */
     private String getSimOrLocaleCountry() {
         String country = null;
-        if (Utils.supportMSim()) {
-            final SubscriptionManager subscriptionManager = SubscriptionManager.from(mContext);
-            final SubscriptionInfo info = subscriptionManager.getActiveSubscriptionInfo(
-                    SmsManager.getDefaultSmsSubscriptionId());
-            if (info != null) {
-                country = info.getCountryIso();
-            }
-        } else {
-            country = mTelephonyManager.getSimCountryIso();
+        final SubscriptionManager subscriptionManager = SubscriptionManager.from(mContext);
+        final SubscriptionInfo info = subscriptionManager.getActiveSubscriptionInfo(
+                SmsManager.getDefaultSmsSubscriptionId());
+        if (info != null) {
+            country = info.getCountryIso();
         }
         if (!TextUtils.isEmpty(country)) {
             return country.toUpperCase();
@@ -438,29 +431,16 @@ public class MmsHttpClient {
      * @return the Base64 encoded NAI string to use as HTTP header
      */
     private String getEncodedNai(final String naiSuffix) {
-        String nai;
-        if (Utils.supportMSim()) {
-            nai = getNaiBySystemApi(
-                    getSlotId(Utils.getEffectiveSubscriptionId(MmsManager.DEFAULT_SUB_ID)));
-        } else {
-            nai = getNaiBySystemProperty();
-        }
+        String nai = getNaiBySystemApi(
+                getSlotId(Utils.getEffectiveSubscriptionId(MmsManager.DEFAULT_SUB_ID)));
         if (!TextUtils.isEmpty(nai)) {
             Log.i(MmsService.TAG, "NAI is not empty");
             if (!TextUtils.isEmpty(naiSuffix)) {
                 nai = nai + naiSuffix;
             }
-            byte[] encoded = null;
-            try {
-                encoded = Base64.encode(nai.getBytes("UTF-8"), Base64.NO_WRAP);
-            } catch (UnsupportedEncodingException e) {
-                encoded = Base64.encode(nai.getBytes(), Base64.NO_WRAP);
-            }
-            try {
-                return new String(encoded, "UTF-8");
-            } catch (UnsupportedEncodingException e) {
-                return new String(encoded);
-            }
+            byte[] encoded;
+            encoded = Base64.encode(nai.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+            return new String(encoded, StandardCharsets.UTF_8);
         }
         return null;
     }
@@ -497,26 +477,6 @@ public class MmsHttpClient {
             }
         } catch (Exception e) {
             Log.w(MmsService.TAG, "TelephonyManager.getNai failed " + e);
-        }
-        return null;
-    }
-
-    /**
-     * Get NAI using hidden SystemProperties.get(String)
-     *
-     * @return the NAI string as system property
-     */
-    private static String getNaiBySystemProperty() {
-        try {
-            final Class systemPropertiesClass = Class.forName("android.os.SystemProperties");
-            if (systemPropertiesClass != null) {
-                final Method method = systemPropertiesClass.getMethod("get", String.class);
-                if (method != null) {
-                    return (String) method.invoke(null, NAI_PROPERTY);
-                }
-            }
-        } catch (Exception e) {
-            Log.w(MmsService.TAG, "SystemProperties.get failed " + e);
         }
         return null;
     }

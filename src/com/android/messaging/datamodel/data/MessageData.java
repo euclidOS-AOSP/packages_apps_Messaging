@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,15 +25,15 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.text.TextUtils;
 
+import androidx.annotation.NonNull;
+
 import com.android.messaging.datamodel.DatabaseHelper;
 import com.android.messaging.datamodel.DatabaseHelper.MessageColumns;
 import com.android.messaging.datamodel.DatabaseWrapper;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.Dates;
-import com.android.messaging.util.DebugUtils;
 import com.android.messaging.util.OsUtil;
 
 import java.util.ArrayList;
@@ -141,7 +142,7 @@ public class MessageData implements Parcelable {
     public static final int BUGLE_STATUS_INCOMING_DOWNLOAD_FAILED            = 106;
     public static final int BUGLE_STATUS_INCOMING_EXPIRED_OR_NOT_AVAILABLE   = 107;
 
-    public static final String getStatusDescription(int status) {
+    public static String getStatusDescription(int status) {
         switch (status) {
             case BUGLE_STATUS_UNKNOWN:
                 return "UNKNOWN";
@@ -180,7 +181,7 @@ public class MessageData implements Parcelable {
             case BUGLE_STATUS_INCOMING_EXPIRED_OR_NOT_AVAILABLE:
                 return "INCOMING_EXPIRED_OR_NOT_AVAILABLE";
             default:
-                return String.valueOf(status) + " (check MessageData)";
+                return status + " (check MessageData)";
         }
     }
 
@@ -201,7 +202,7 @@ public class MessageData implements Parcelable {
      * Create an "empty" message
      */
     public MessageData() {
-        mParts = new ArrayList<MessagePartData>();
+        mParts = new ArrayList<>();
     }
 
     public static String[] getProjection() {
@@ -561,17 +562,13 @@ public class MessageData implements Parcelable {
     }
 
     public final boolean getInResendWindow(final long now) {
-        final long maxAgeToResend = BugleGservices.get().getLong(
-                BugleGservicesKeys.MESSAGE_RESEND_TIMEOUT_MS,
-                BugleGservicesKeys.MESSAGE_RESEND_TIMEOUT_MS_DEFAULT);
+        final long maxAgeToResend = BugleGservicesKeys.MESSAGE_RESEND_TIMEOUT_MS_DEFAULT;
         final long age = now - mRetryStartTimestamp;
         return age < maxAgeToResend;
     }
 
     public final boolean getInDownloadWindow(final long now) {
-        final long maxAgeToRedownload = BugleGservices.get().getLong(
-                BugleGservicesKeys.MESSAGE_DOWNLOAD_TIMEOUT_MS,
-                BugleGservicesKeys.MESSAGE_DOWNLOAD_TIMEOUT_MS_DEFAULT);
+        final long maxAgeToRedownload = BugleGservicesKeys.MESSAGE_DOWNLOAD_TIMEOUT_MS_DEFAULT;
         final long age = now - mRetryStartTimestamp;
         return age < maxAgeToRedownload;
     }
@@ -583,11 +580,9 @@ public class MessageData implements Parcelable {
             return false;
         }
         // Should show option for manual download if status is manual download or failed
+        // If debug is enabled, allow to download an expired or unavailable message.
         return (status == BUGLE_STATUS_INCOMING_DOWNLOAD_FAILED ||
-                status == BUGLE_STATUS_INCOMING_YET_TO_MANUAL_DOWNLOAD ||
-                // If debug is enabled, allow to download an expired or unavailable message.
-                (DebugUtils.isDebugEnabled()
-                        && status == BUGLE_STATUS_INCOMING_EXPIRED_OR_NOT_AVAILABLE));
+                status == BUGLE_STATUS_INCOMING_YET_TO_MANUAL_DOWNLOAD);
     }
 
     public boolean canDownloadMessage() {
@@ -608,11 +603,9 @@ public class MessageData implements Parcelable {
             return false;
         }
         // Can redownload if status is manual download not started or download failed
+        // If debug is enabled, allow to download an expired or unavailable message.
         return (mStatus == BUGLE_STATUS_INCOMING_DOWNLOAD_FAILED ||
-                mStatus == BUGLE_STATUS_INCOMING_YET_TO_MANUAL_DOWNLOAD ||
-                // If debug is enabled, allow to download an expired or unavailable message.
-                (DebugUtils.isDebugEnabled()
-                        && mStatus == BUGLE_STATUS_INCOMING_EXPIRED_OR_NOT_AVAILABLE));
+                mStatus == BUGLE_STATUS_INCOMING_YET_TO_MANUAL_DOWNLOAD);
     }
 
     static boolean getShowResendMessage(final int status) {
@@ -646,15 +639,7 @@ public class MessageData implements Parcelable {
                 || mProtocol == MessageData.PROTOCOL_MMS_PUSH_NOTIFICATION;
     }
 
-    public static final boolean getIsMmsNotification(final int protocol) {
-        return (protocol == MessageData.PROTOCOL_MMS_PUSH_NOTIFICATION);
-    }
-
-    public final boolean getIsMmsNotification() {
-        return getIsMmsNotification(mProtocol);
-    }
-
-    public static final boolean getIsSms(final int protocol) {
+    public static boolean getIsSms(final int protocol) {
         return protocol == (MessageData.PROTOCOL_SMS);
     }
 
@@ -675,7 +660,7 @@ public class MessageData implements Parcelable {
     }
 
     public final String getMessageText() {
-        final String separator = System.getProperty("line.separator");
+        final String separator = System.lineSeparator();
         final StringBuilder text = new StringBuilder();
         for (final MessagePartData part : mParts) {
             if (!part.isAttachment() && !TextUtils.isEmpty(part.getText())) {
@@ -693,7 +678,7 @@ public class MessageData implements Parcelable {
      * appends a text part
      */
     public final void consolidateText() {
-        final String separator = System.getProperty("line.separator");
+        final String separator = System.lineSeparator();
         final StringBuilder captionText = new StringBuilder();
         MessagePartData firstTextPart = null;
         int firstTextPartIndex = -1;
@@ -808,10 +793,6 @@ public class MessageData implements Parcelable {
         }
     }
 
-    public final void setRetryStartTimestamp(final long timestamp) {
-        mRetryStartTimestamp = timestamp;
-    }
-
     public final void setRawTelephonyStatus(final int rawStatus) {
         mRawStatus = rawStatus;
     }
@@ -853,10 +834,11 @@ public class MessageData implements Parcelable {
         mRetryStartTimestamp = in.readLong();
 
         // Read parts
-        mParts = new ArrayList<MessagePartData>();
+        mParts = new ArrayList<>();
         final int partCount = in.readInt();
         for (int i = 0; i < partCount; i++) {
-            mParts.add((MessagePartData) in.readParcelable(MessagePartData.class.getClassLoader()));
+            mParts.add(in.readParcelable(MessagePartData.class.getClassLoader(),
+                    MessagePartData.class));
         }
     }
 
@@ -896,7 +878,7 @@ public class MessageData implements Parcelable {
     }
 
     public static final Parcelable.Creator<MessageData> CREATOR
-            = new Parcelable.Creator<MessageData>() {
+            = new Parcelable.Creator<>() {
         @Override
         public MessageData createFromParcel(final Parcel in) {
             return new MessageData(in);
@@ -908,6 +890,7 @@ public class MessageData implements Parcelable {
         }
     };
 
+    @NonNull
     @Override
     public String toString() {
         return toString(mMessageId, mParts);

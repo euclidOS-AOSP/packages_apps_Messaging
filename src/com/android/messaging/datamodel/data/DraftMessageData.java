@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +18,8 @@
 package com.android.messaging.datamodel.data;
 
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 
 import com.android.messaging.datamodel.MessageTextStats;
@@ -33,11 +36,9 @@ import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.Assert.DoesNotRunOnMainThread;
 import com.android.messaging.util.Assert.RunsOnMainThread;
-import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.PhoneUtils;
-import com.android.messaging.util.SafeAsyncTask;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -45,6 +46,11 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DraftMessageData extends BindableData implements ReadDraftDataActionListener {
 
@@ -70,16 +76,16 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
     }
 
     // Flags sent to onDraftChanged to help the receiver limit the amount of work done
-    public static int ATTACHMENTS_CHANGED  =     0x0001;
-    public static int MESSAGE_TEXT_CHANGED =     0x0002;
-    public static int MESSAGE_SUBJECT_CHANGED =  0x0004;
+    public static final int ATTACHMENTS_CHANGED  =     0x0001;
+    public static final int MESSAGE_TEXT_CHANGED =     0x0002;
+    public static final int MESSAGE_SUBJECT_CHANGED =  0x0004;
     // Whether the self participant data has been loaded
-    public static int SELF_CHANGED =             0x0008;
-    public static int ALL_CHANGED =              0x00FF;
+    public static final int SELF_CHANGED =             0x0008;
+    public static final int ALL_CHANGED =              0x00FF;
     // ALL_CHANGED intentionally doesn't include WIDGET_CHANGED. ConversationFragment needs to
     // be notified if the draft it is looking at is changed externally (by a desktop widget) so it
     // can reload the draft.
-    public static int WIDGET_CHANGED  =          0x0100;
+    public static final int WIDGET_CHANGED  =          0x0100;
 
     private final String mConversationId;
     private ReadDraftDataActionMonitor mMonitor;
@@ -91,7 +97,7 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
     private String mMessageText;
     private String mMessageSubject;
     private String mSelfId;
-    private MessageTextStats mMessageTextStats;
+    private final MessageTextStats mMessageTextStats;
     private boolean mSending;
 
     /** Keeps track of completed attachments in the message draft. This data is persisted to db */
@@ -117,9 +123,9 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
 
     public DraftMessageData(final String conversationId) {
         mConversationId = conversationId;
-        mAttachments = new ArrayList<MessagePartData>();
+        mAttachments = new ArrayList<>();
         mReadOnlyAttachments = Collections.unmodifiableList(mAttachments);
-        mPendingAttachments = new ArrayList<PendingAttachmentData>();
+        mPendingAttachments = new ArrayList<>();
         mReadOnlyPendingAttachments = Collections.unmodifiableList(mPendingAttachments);
         mListeners = new DraftMessageDataEventDispatcher();
         mMessageTextStats = new MessageTextStats();
@@ -179,7 +185,7 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
      * @return the MessageData for the draft, null if self id is not set
      */
     public MessageData createMessageWithCurrentAttachments(final boolean clearLocalCopy) {
-        MessageData message = null;
+        MessageData message;
         if (getIsMms()) {
             message = MessageData.createDraftMmsMessage(mConversationId, mSelfId,
                     mMessageText, mMessageSubject);
@@ -470,9 +476,7 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
     }
 
     private int getAttachmentLimit() {
-        return BugleGservices.get().getInt(
-                BugleGservicesKeys.MMS_ATTACHMENT_LIMIT,
-                BugleGservicesKeys.MMS_ATTACHMENT_LIMIT_DEFAULT);
+        return BugleGservicesKeys.MMS_ATTACHMENT_LIMIT_DEFAULT;
     }
 
     public void removeAttachment(final MessagePartData attachment) {
@@ -650,7 +654,6 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
 
     /**
      * Check if Bugle is default sms app
-     * @return
      */
     public boolean getIsDefaultSmsApp() {
         return PhoneUtils.getDefault().isDefaultSmsApp();
@@ -681,7 +684,7 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
         // Any change in the draft will cancel any pending draft checking task, since the
         // size/status of the draft may have changed.
         if (mCheckDraftForSendTask != null) {
-            mCheckDraftForSendTask.cancel(true /* mayInterruptIfRunning */);
+            mCheckDraftForSendTask.cancel();
             mCheckDraftForSendTask = null;
         }
         mListeners.onDraftChanged(this, changeFlags);
@@ -711,7 +714,7 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
     public void checkDraftForAction(final boolean checkMessageSize, final int selfSubId,
             final CheckDraftTaskCallback callback, final Binding<DraftMessageData> binding) {
         new CheckDraftForSendTask(checkMessageSize, selfSubId, callback, binding)
-            .executeOnThreadPool((Void) null);
+            .execute();
     }
 
     /**
@@ -753,7 +756,7 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
         void onDraftChecked(DraftMessageData data, int result);
     }
 
-    public class CheckDraftForSendTask extends SafeAsyncTask<Void, Void, Integer> {
+    public class CheckDraftForSendTask {
         public static final int RESULT_PASSED = 0;
         public static final int RESULT_HAS_PENDING_ATTACHMENTS = 1;
         public static final int RESULT_NO_SELF_PHONE_NUMBER_IN_GROUP_MMS = 2;
@@ -765,6 +768,10 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
         private final CheckDraftTaskCallback mCallback;
         private final String mBindingId;
         private final List<MessagePartData> mAttachmentsCopy;
+        ScheduledExecutorService mExecutor = Executors.newScheduledThreadPool(2);
+        private final Handler mHandler = new Handler(Looper.getMainLooper());
+        private Future<?> mFuture;
+        private boolean mCancelled;
         private int mPreExecuteResult = RESULT_PASSED;
 
         public CheckDraftForSendTask(final boolean checkMessageSize, final int selfSubId,
@@ -775,12 +782,56 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
             mBindingId = binding.getBindingId();
             // Obtain an immutable copy of the attachment list so we can operate on it in the
             // background thread.
-            mAttachmentsCopy = new ArrayList<MessagePartData>(mAttachments);
+            mAttachmentsCopy = new ArrayList<>(mAttachments);
 
             mCheckDraftForSendTask = this;
         }
 
-        @Override
+        public void execute() {
+            onPreExecute();
+
+            mFuture = mExecutor.submit(() -> {
+                final int result;
+                if (mPreExecuteResult != RESULT_PASSED) {
+                    result = mPreExecuteResult;
+                } else if (mCheckMessageSize && getIsMessageOverLimit()) {
+                    result = RESULT_MESSAGE_OVER_LIMIT;
+                } else {
+                    result = RESULT_PASSED;
+                }
+
+                mHandler.post(() -> {
+                    mCheckDraftForSendTask = null;
+                    // Only call back if we are bound to the original binding.
+                    if (isBound(mBindingId) && !mCancelled) {
+                        mCallback.onDraftChecked(DraftMessageData.this, result);
+                    } else {
+                        if (!isBound(mBindingId)) {
+                            LogUtil.w(LogUtil.BUGLE_TAG, "Message can't be sent: draft not bound");
+                        }
+                        if (mCancelled) {
+                            LogUtil.w(LogUtil.BUGLE_TAG,
+                                    "Message can't be sent: draft is cancelled");
+                        }
+                    }
+                });
+            });
+
+            mExecutor.schedule(this::cancel, 10, TimeUnit.SECONDS);
+        }
+
+        public void cancel() {
+            if (!mFuture.isDone()) {
+                mFuture.cancel(true);
+                mCancelled = true;
+                mCheckDraftForSendTask = null;
+            }
+        }
+
+        public boolean isCancelled() {
+            return mCancelled;
+        }
+
         protected void onPreExecute() {
             // Perform checking work that can happen on the main thread.
             if (hasPendingAttachments()) {
@@ -804,39 +855,6 @@ public class DraftMessageData extends BindableData implements ReadDraftDataActio
                 mPreExecuteResult = RESULT_VIDEO_ATTACHMENT_LIMIT_EXCEEDED;
                 return;
             }
-        }
-
-        @Override
-        protected Integer doInBackgroundTimed(Void... params) {
-            if (mPreExecuteResult != RESULT_PASSED) {
-                return mPreExecuteResult;
-            }
-
-            if (mCheckMessageSize && getIsMessageOverLimit()) {
-                return RESULT_MESSAGE_OVER_LIMIT;
-            }
-            return RESULT_PASSED;
-        }
-
-        @Override
-        protected void onPostExecute(Integer result) {
-            mCheckDraftForSendTask = null;
-            // Only call back if we are bound to the original binding.
-            if (isBound(mBindingId) && !isCancelled()) {
-                mCallback.onDraftChecked(DraftMessageData.this, result);
-            } else {
-                if (!isBound(mBindingId)) {
-                    LogUtil.w(LogUtil.BUGLE_TAG, "Message can't be sent: draft not bound");
-                }
-                if (isCancelled()) {
-                    LogUtil.w(LogUtil.BUGLE_TAG, "Message can't be sent: draft is cancelled");
-                }
-            }
-        }
-
-        @Override
-        protected void onCancelled() {
-            mCheckDraftForSendTask = null;
         }
 
         /**

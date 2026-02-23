@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +18,11 @@
 package com.android.messaging.util;
 
 import android.app.Activity;
-import android.app.Fragment;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.view.View;
+
+import androidx.fragment.app.Fragment;
 
 import com.android.messaging.R;
 import com.android.messaging.ui.SnackBar;
@@ -30,7 +32,7 @@ public class ChangeDefaultSmsAppHelper {
     private Runnable mRunAfterMadeDefault;
     private ChangeSmsAppSettingRunnable mChangeSmsAppSettingRunnable;
 
-    private static final int REQUEST_SET_DEFAULT_SMS_APP = 1;
+    public static final int REQUEST_SET_DEFAULT_SMS_APP = 1;
 
     /**
      * When there's some condition that prevents an operation, such as sending a message,
@@ -66,7 +68,7 @@ public class ChangeDefaultSmsAppHelper {
 
         // Is the default sms app?
         } else if (!isDefaultSmsApp) {
-            mChangeSmsAppSettingRunnable = new ChangeSmsAppSettingRunnable(activity, fragment);
+            mChangeSmsAppSettingRunnable = new ChangeSmsAppSettingRunnable(activity);
             promptToChangeDefaultSmsApp(sending, runAfterMadeDefault,
                     composeView, rootView, activity);
         }
@@ -102,24 +104,18 @@ public class ChangeDefaultSmsAppHelper {
         }
     }
 
-    private class ChangeSmsAppSettingRunnable implements Runnable {
+    private static class ChangeSmsAppSettingRunnable implements Runnable {
         private final Activity mActivity;
-        private final Fragment mFragment;
 
-        public ChangeSmsAppSettingRunnable(final Activity activity, final Fragment fragment) {
+        public ChangeSmsAppSettingRunnable(final Activity activity) {
             mActivity = activity;
-            mFragment = fragment;
         }
 
         @Override
         public void run() {
             try {
                 final Intent intent = UIIntents.get().getChangeDefaultSmsAppIntent(mActivity);
-                if (mFragment != null) {
-                    mFragment.startActivityForResult(intent, REQUEST_SET_DEFAULT_SMS_APP);
-                } else {
-                    mActivity.startActivityForResult(intent, REQUEST_SET_DEFAULT_SMS_APP);
-                }
+                mActivity.startActivityForResult(intent, REQUEST_SET_DEFAULT_SMS_APP);
             } catch (final ActivityNotFoundException ex) {
                 // We shouldn't get here, but the monkey on JB MR0 can trigger it.
                 LogUtil.w(LogUtil.BUGLE_TAG, "Couldn't find activity:", ex);
@@ -153,5 +149,3 @@ public class ChangeDefaultSmsAppHelper {
         }
     }
 }
-
-

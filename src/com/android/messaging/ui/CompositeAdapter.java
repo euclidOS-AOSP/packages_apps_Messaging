@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +31,9 @@ public class CompositeAdapter extends BaseAdapter {
     private static final int INITIAL_CAPACITY = 2;
 
     public static class Partition {
-        boolean mShowIfEmpty;
-        boolean mHasHeader;
-        BaseAdapter mAdapter;
+        final boolean mShowIfEmpty;
+        final boolean mHasHeader;
+        final BaseAdapter mAdapter;
 
         public Partition(final boolean showIfEmpty, final boolean hasHeader,
                 final BaseAdapter adapter) {
@@ -66,10 +67,6 @@ public class CompositeAdapter extends BaseAdapter {
 
         public View getHeaderView(final View convertView, final ViewGroup parentView) {
             return null;
-        }
-
-        public void close() {
-            // do nothing in base class.
         }
     }
 
@@ -113,56 +110,6 @@ public class CompositeAdapter extends BaseAdapter {
         partition.getAdapter().registerDataSetObserver(mObserver);
         invalidate();
         notifyDataSetChanged();
-    }
-
-    public void removePartition(final int index) {
-        final Partition partition = mPartitions[index];
-        partition.close();
-        System.arraycopy(mPartitions, index + 1, mPartitions, index,
-                mSize - index - 1);
-        mSize--;
-        partition.getAdapter().unregisterDataSetObserver(mObserver);
-        invalidate();
-        notifyDataSetChanged();
-    }
-
-    public void clearPartitions() {
-        for (int i = 0; i < mSize; i++) {
-            final Partition partition = mPartitions[i];
-            partition.close();
-            partition.getAdapter().unregisterDataSetObserver(mObserver);
-        }
-        invalidate();
-        notifyDataSetChanged();
-    }
-
-    public Partition getPartition(final int index) {
-        return mPartitions[index];
-    }
-
-    public int getPartitionAtPosition(final int position) {
-        ensureCacheValid();
-        int start = 0;
-        for (int i = 0; i < mSize; i++) {
-            final int end = start + mPartitions[i].getCount();
-            if (position >= start && position < end) {
-                int offset = position - start;
-                if (mPartitions[i].hasHeader() &&
-                        (mPartitions[i].getCount() > 0 || mPartitions[i].showIfEmpty())) {
-                    offset--;
-                }
-                if (offset == -1) {
-                    return -1;
-                }
-                return i;
-            }
-            start = end;
-        }
-        return mSize - 1;
-    }
-
-    public int getPartitionCount() {
-        return mSize;
     }
 
     public void invalidate() {

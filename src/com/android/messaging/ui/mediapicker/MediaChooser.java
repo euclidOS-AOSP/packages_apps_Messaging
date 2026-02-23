@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +17,23 @@
 
 package com.android.messaging.ui.mediapicker;
 
-import android.app.FragmentManager;
 import android.content.Context;
-import android.content.Intent;
-import androidx.appcompat.app.ActionBar;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 
+import androidx.appcompat.app.ActionBar;
+import androidx.fragment.app.FragmentManager;
+
 import com.android.messaging.R;
 import com.android.messaging.datamodel.binding.ImmutableBindingRef;
-import com.android.messaging.datamodel.data.MediaPickerData;
 import com.android.messaging.datamodel.data.DraftMessageData.DraftMessageSubscriptionDataProvider;
+import com.android.messaging.datamodel.data.MediaPickerData;
 import com.android.messaging.ui.BasePagerViewHolder;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.OsUtil;
 
 abstract class MediaChooser extends BasePagerViewHolder
         implements DraftMessageSubscriptionDataProvider {
@@ -94,12 +93,7 @@ abstract class MediaChooser extends BasePagerViewHolder
         mTabButton.setContentDescription(
                 inflater.getContext().getResources().getString(getIconDescriptionResource()));
         setSelected(mSelected);
-        mTabButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(final View view) {
-                mMediaPicker.selectChooser(MediaChooser.this);
-            }
-        });
+        mTabButton.setOnClickListener(view -> mMediaPicker.selectChooser(MediaChooser.this));
     }
 
     protected Context getContext() {
@@ -107,15 +101,11 @@ abstract class MediaChooser extends BasePagerViewHolder
     }
 
     protected FragmentManager getFragmentManager() {
-        return OsUtil.isAtLeastJB_MR1() ? mMediaPicker.getChildFragmentManager() :
-                mMediaPicker.getFragmentManager();
+        return mMediaPicker.getChildFragmentManager();
     }
     protected LayoutInflater getLayoutInflater() {
         return LayoutInflater.from(getContext());
     }
-
-    /** Allows the chooser to handle full screen change */
-    void onFullScreenChanged(final boolean fullScreen) {}
 
     /** Allows the chooser to handle the chooser being opened or closed */
     void onOpenedChanged(final boolean open) {
@@ -145,7 +135,7 @@ abstract class MediaChooser extends BasePagerViewHolder
             actionBar.setDisplayHomeAsUpEnabled(true);
             actionBar.show();
             // Use X instead of <- in the action bar
-            actionBar.setHomeAsUpIndicator(R.drawable.ic_remove_small_light);
+            actionBar.setHomeAsUpIndicator(R.drawable.ic_cancel_small_light);
             actionBar.setTitle(actionBarTitleResId);
         }
     }
@@ -183,9 +173,6 @@ abstract class MediaChooser extends BasePagerViewHolder
         return false;
     }
 
-    public void onCreateOptionsMenu(final MenuInflater inflater, final Menu menu) {
-    }
-
     public boolean onOptionsItemSelected(final MenuItem item) {
         return false;
     }
@@ -204,9 +191,6 @@ abstract class MediaChooser extends BasePagerViewHolder
     public void stopTouchHandling() {
     }
 
-    protected void onActivityResult(
-            final int requestCode, final int resultCode, final Intent data) {}
-
     @Override
     public int getConversationSelfSubId() {
         return mMediaPicker.getConversationSelfSubId();
@@ -214,7 +198,4 @@ abstract class MediaChooser extends BasePagerViewHolder
 
     /** Optional activity life-cycle methods to be overridden by subclasses */
     public void onPause() { }
-    public void onResume() { }
-    protected void onRequestPermissionsResult(
-            final int requestCode, final String permissions[], final int[] grantResults) { }
 }

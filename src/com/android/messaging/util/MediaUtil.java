@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +21,8 @@ import android.content.Context;
 import com.android.messaging.Factory;
 
 public abstract class MediaUtil {
-    public static interface OnCompletionListener {
-        public void onCompletion();
+    public interface OnCompletionListener {
+        void onCompletion();
     }
 
     public static MediaUtil get() {
@@ -33,8 +34,4 @@ public abstract class MediaUtil {
      */
     public abstract void playSound(final Context context, final int resId,
             final OnCompletionListener completionListener);
-
-    public static boolean canAutoAccessIncomingMedia() {
-        return OsUtil.isAtLeastM();
-    }
 }

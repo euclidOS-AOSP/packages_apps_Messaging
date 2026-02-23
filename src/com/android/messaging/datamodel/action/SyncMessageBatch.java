@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +22,7 @@ import android.database.sqlite.SQLiteConstraintException;
 import android.provider.Telephony;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.Sms;
+import android.support.v7.mms.pdu.PduHeaders;
 import android.text.TextUtils;
 
 import com.android.messaging.datamodel.BugleDatabaseOperations;
@@ -32,7 +34,6 @@ import com.android.messaging.datamodel.DatabaseWrapper;
 import com.android.messaging.datamodel.SyncManager.ThreadInfoCache;
 import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.mmslib.pdu.PduHeaders;
 import com.android.messaging.sms.DatabaseMessages.LocalDatabaseMessage;
 import com.android.messaging.sms.DatabaseMessages.MmsMessage;
 import com.android.messaging.sms.DatabaseMessages.SmsMessage;
@@ -72,7 +73,7 @@ class SyncMessageBatch {
         mMmsToAdd = mmsToAdd;
         mMessagesToDelete = messagesToDelete;
         mCache = cache;
-        mConversationsToUpdate = new HashSet<String>();
+        mConversationsToUpdate = new HashSet<>();
     }
 
     void updateLocalDatabase() {
@@ -97,11 +98,9 @@ class SyncMessageBatch {
                     messageListToIds(mMessagesToDelete));
 
             for (final LocalDatabaseMessage message : mMessagesToDelete) {
-                if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                    LogUtil.v(TAG, "SyncMessageBatch: Deleted message " + message.getLocalId()
-                            + " for SMS/MMS " + message.getUri() + " with timestamp "
-                            + message.getTimestampInMillis());
-                }
+                LogUtil.v(TAG, "SyncMessageBatch: Deleted message " + message.getLocalId()
+                        + " for SMS/MMS " + message.getUri() + " with timestamp "
+                        + message.getTimestampInMillis());
             }
 
             // Update conversation state for imported messages, like snippet,
@@ -123,8 +122,6 @@ class SyncMessageBatch {
 
     /**
      * Store the SMS message into local database.
-     *
-     * @param sms
      */
     private void storeSms(final DatabaseWrapper db, final SmsMessage sms) {
         if (sms.mBody == null) {
@@ -186,11 +183,9 @@ class SyncMessageBatch {
                     conversationId, selfId, participantId);
         }
 
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "SyncMessageBatch: Inserted new message " + message.getMessageId()
-                    + " for SMS " + message.getSmsMessageUri() + " received at "
-                    + message.getReceivedTimeStamp());
-        }
+        LogUtil.v(TAG, "SyncMessageBatch: Inserted new message " + message.getMessageId()
+                + " for SMS " + message.getSmsMessageUri() + " received at "
+                + message.getReceivedTimeStamp());
 
         // Keep track of updated conversation for later updating the conversation snippet, etc.
         mConversationsToUpdate.add(conversationId);
@@ -198,7 +193,7 @@ class SyncMessageBatch {
 
     public static int bugleStatusForSms(final boolean isOutgoing, final int type,
             final int status) {
-        int bugleStatus = MessageData.BUGLE_STATUS_UNKNOWN;
+        int bugleStatus;
         // For a message we sync either
         if (isOutgoing) {
             // Outgoing message not yet been sent
@@ -224,8 +219,6 @@ class SyncMessageBatch {
 
     /**
      * Store the MMS message into local database
-     *
-     * @param mms
      */
     private void storeMms(final DatabaseWrapper db, final MmsMessage mms) {
         if (mms.mParts.size() < 1) {
@@ -276,11 +269,9 @@ class SyncMessageBatch {
                     conversationId, selfId, participantId);
         }
 
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "SyncMessageBatch: Inserted new message " + message.getMessageId()
-                    + " for MMS " + message.getSmsMessageUri() + " received at "
-                    + message.getReceivedTimeStamp());
-        }
+        LogUtil.v(TAG, "SyncMessageBatch: Inserted new message " + message.getMessageId()
+                + " for MMS " + message.getSmsMessageUri() + " received at "
+                + message.getReceivedTimeStamp());
 
         // Keep track of updated conversation for later updating the conversation snippet, etc.
         mConversationsToUpdate.add(conversationId);
@@ -298,20 +289,14 @@ class SyncMessageBatch {
         // with those details.
 
         String foundConversationId = null;
-        Cursor cursor = null;
-        try {
+        try (Cursor cursor = db.rawQuery("SELECT " + ConversationColumns._ID
+                        + " FROM " + DatabaseHelper.CONVERSATIONS_TABLE
+                        + " WHERE " + ConversationColumns._ID + "=" + conversationId,
+                null)) {
             // Look for an existing conversation in the db with the conversation id
-            cursor = db.rawQuery("SELECT " + ConversationColumns._ID
-                    + " FROM " + DatabaseHelper.CONVERSATIONS_TABLE
-                    + " WHERE " + ConversationColumns._ID + "=" + conversationId,
-                    null);
             if (cursor != null && cursor.moveToFirst()) {
                 Assert.isTrue(cursor.getCount() == 1);
                 foundConversationId = cursor.getString(0);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -354,9 +339,6 @@ class SyncMessageBatch {
      * Batch delete database rows by matching a column with a list of values, usually some
      * kind of IDs.
      *
-     * @param table
-     * @param column
-     * @param ids
      * @return Total number of deleted messages
      */
     private static int batchDelete(final DatabaseWrapper db, final String table,

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +16,10 @@
  */
 package com.android.messaging.ui.attachmentchooser;
 
-import android.app.Fragment;
 import android.content.Context;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
-import androidx.appcompat.app.ActionBar;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -28,6 +27,10 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.fragment.app.Fragment;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.DataModel;
@@ -40,7 +43,6 @@ import com.android.messaging.datamodel.data.MessagePartData;
 import com.android.messaging.ui.BugleActionBarActivity;
 import com.android.messaging.ui.UIIntents;
 import com.android.messaging.ui.attachmentchooser.AttachmentGridView.AttachmentGridHost;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,14 +57,13 @@ public class AttachmentChooserFragment extends Fragment implements DraftMessageD
     private AttachmentGridAdapter mAdapter;
     private AttachmentChooserFragmentHost mHost;
 
-    @VisibleForTesting
-    Binding<DraftMessageData> mBinding = BindingBase.createBinding(this);
+    final Binding<DraftMessageData> mBinding = BindingBase.createBinding(this);
 
     @Override
     public View onCreateView(final LayoutInflater inflater, final ViewGroup container,
             final Bundle savedInstanceState) {
         final View view = inflater.inflate(R.layout.attachment_chooser_fragment, container, false);
-        mAttachmentGridView = (AttachmentGridView) view.findViewById(R.id.grid);
+        mAttachmentGridView = view.findViewById(R.id.grid);
         mAdapter = new AttachmentGridAdapter(getActivity());
         mAttachmentGridView.setAdapter(mAdapter);
         mAttachmentGridView.setHost(this);
@@ -77,24 +78,20 @@ public class AttachmentChooserFragment extends Fragment implements DraftMessageD
     }
 
     @Override
-    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
         super.onCreateOptionsMenu(menu, inflater);
         inflater.inflate(R.menu.attachment_chooser_menu, menu);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.action_confirm_selection:
-                confirmSelection();
-                return true;
-
-            default:
-                return super.onOptionsItemSelected(item);
+        if (item.getItemId() == R.id.action_confirm_selection) {
+            confirmSelection();
+            return true;
         }
+        return super.onOptionsItemSelected(item);
     }
 
-    @VisibleForTesting
     void confirmSelection() {
         if (mBinding.isBound()) {
             mBinding.getData().removeExistingAttachments(
@@ -155,7 +152,7 @@ public class AttachmentChooserFragment extends Fragment implements DraftMessageD
 
     class AttachmentGridAdapter extends ArrayAdapter<MessagePartData> {
         public AttachmentGridAdapter(final Context context) {
-            super(context, R.layout.attachment_grid_item_view, new ArrayList<MessagePartData>());
+            super(context, R.layout.attachment_grid_item_view, new ArrayList<>());
         }
 
         public void onAttachmentsLoaded(final List<MessagePartData> attachments) {
@@ -164,8 +161,10 @@ public class AttachmentChooserFragment extends Fragment implements DraftMessageD
             notifyDataSetChanged();
         }
 
+        @NonNull
         @Override
-        public View getView(final int position, final View convertView, final ViewGroup parent) {
+        public View getView(final int position, final View convertView,
+                            @NonNull final ViewGroup parent) {
             AttachmentGridItemView itemView;
             final MessagePartData item = getItem(position);
             if (convertView != null && convertView instanceof AttachmentGridItemView) {

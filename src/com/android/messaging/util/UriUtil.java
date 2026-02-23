@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +18,6 @@ package com.android.messaging.util;
 
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.res.AssetFileDescriptor;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -26,7 +26,6 @@ import androidx.annotation.NonNull;
 import android.text.TextUtils;
 
 import com.android.messaging.Factory;
-import com.android.messaging.datamodel.GalleryBoundCursorLoader;
 import com.android.messaging.datamodel.MediaScratchFileProvider;
 import com.android.messaging.util.Assert.DoesNotRunOnMainThread;
 import com.google.common.io.ByteStreams;
@@ -47,13 +46,13 @@ public class UriUtil {
     private static final String SCHEME_SMSTO = "smsto";
     private static final String SCHEME_MMS = "mms";
     private static final String SCHEME_MMSTO = "smsto";
-    public static final HashSet<String> SMS_MMS_SCHEMES = new HashSet<String>(
+    public static final HashSet<String> SMS_MMS_SCHEMES = new HashSet<>(
         Arrays.asList(SCHEME_SMS, SCHEME_MMS, SCHEME_SMSTO, SCHEME_MMSTO));
     private static final String SCHEME_HTTP = "http";
     private static final String SCHEME_HTTPS = "https";
 
     public static final String SCHEME_BUGLE = "bugle";
-    public static final HashSet<String> SUPPORTED_SCHEME = new HashSet<String>(
+    public static final HashSet<String> SUPPORTED_SCHEME = new HashSet<>(
         Arrays.asList(ContentResolver.SCHEME_ANDROID_RESOURCE,
             ContentResolver.SCHEME_CONTENT,
             ContentResolver.SCHEME_FILE,
@@ -136,18 +135,6 @@ public class UriUtil {
     }
 
     /**
-     * Gets the content:// style URI for the given MediaStore row Id in the files table on the
-     * external volume.
-     *
-     * @param id the MediaStore row Id to get the URI for
-     * @return the URI to the files table on the external storage.
-     */
-    public static Uri getContentUriForMediaStoreId(final long id) {
-        return MediaStore.Files.getContentUri(
-                GalleryBoundCursorLoader.MEDIA_SCANNER_VOLUME_EXTERNAL, id);
-    }
-
-    /**
      * Gets the size in bytes for the content uri. Currently we only support content in the
      * scratch space.
      */
@@ -155,21 +142,13 @@ public class UriUtil {
     public static long getContentSize(final Uri uri) {
         Assert.isNotMainThread();
         if (isLocalResourceUri(uri)) {
-            ParcelFileDescriptor pfd = null;
-            try {
-                pfd = Factory.get().getApplicationContext()
-                        .getContentResolver().openFileDescriptor(uri, "r");
+            try (ParcelFileDescriptor pfd = Factory.get().getApplicationContext()
+                    .getContentResolver().openFileDescriptor(uri, "r")) {
                 return Math.max(pfd.getStatSize(), 0);
             } catch (final FileNotFoundException e) {
                 LogUtil.e(LogUtil.BUGLE_TAG, "Error getting content size", e);
-            } finally {
-                if (pfd != null) {
-                    try {
-                        pfd.close();
-                    } catch (final IOException e) {
-                        // Do nothing.
-                    }
-                }
+            } catch (final IOException e) {
+                // Do nothing.
             }
         } else {
             Assert.fail("Unsupported uri type!");
@@ -279,14 +258,12 @@ public class UriUtil {
 
     /**
      * Persist a piece of content from the given sourceUri, byte by byte to the
-     * specified output directory.
-     * @return the output Uri if the operation succeeded, or null if failed.
+     * specified targetUri.
      */
     @DoesNotRunOnMainThread
-    public static Uri persistContent(
-            final Uri sourceUri, final File outputDir, final String contentType) {
+    public static void persistContent(
+            final Context context, final Uri sourceUri, final Uri targetUri) {
         InputStream inputStream = null;
-        final Context context = Factory.get().getApplicationContext();
         try {
             if (UriUtil.isLocalResourceUri(sourceUri)) {
                 inputStream = context.getContentResolver().openInputStream(sourceUri);
@@ -294,13 +271,12 @@ public class UriUtil {
                 // The content is remote. Download it.
                 inputStream = getInputStreamFromRemoteUri(sourceUri);
                 if (inputStream == null) {
-                    return null;
+                    return;
                 }
             }
-            return persistContent(inputStream, outputDir, contentType);
+            copyContent(context, inputStream, targetUri);
         } catch (final Exception ex) {
             LogUtil.e(LogUtil.BUGLE_TAG, "Error while retrieving media ", ex);
-            return null;
         } finally {
             if (inputStream != null) {
                 try {
@@ -365,32 +341,6 @@ public class UriUtil {
         // replaceUnicodeDigits will replace digits typed in other languages (i.e. Egyptian) with
         // the usual ascii equivalents.
         return TextUtil.replaceUnicodeDigits(parts[0]).replace(';', ',');
-    }
-
-    /**
-     * Return the length of the file to which contentUri refers
-     *
-     * @param contentUri URI for the file of which we want the length
-     * @return Length of the file or AssetFileDescriptor.UNKNOWN_LENGTH
-     */
-    public static long getUriContentLength(final Uri contentUri) {
-        final Context context = Factory.get().getApplicationContext();
-        AssetFileDescriptor afd = null;
-        try {
-            afd = context.getContentResolver().openAssetFileDescriptor(contentUri, "r");
-            return afd.getLength();
-        } catch (final FileNotFoundException e) {
-            LogUtil.w(LogUtil.BUGLE_TAG, "Failed to query length of " + contentUri);
-        } finally {
-            if (afd != null) {
-                try {
-                    afd.close();
-                } catch (final IOException e) {
-                    LogUtil.w(LogUtil.BUGLE_TAG, "Failed to close afd for " + contentUri);
-                }
-            }
-        }
-        return AssetFileDescriptor.UNKNOWN_LENGTH;
     }
 
     /** @return string representation of URI or null if URI was null */

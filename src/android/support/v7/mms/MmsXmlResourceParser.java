@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.util.Log;
 
@@ -29,9 +30,6 @@ import java.io.IOException;
 abstract class MmsXmlResourceParser {
     /**
      * Parse the content
-     *
-     * @throws IOException
-     * @throws XmlPullParserException
      */
     protected abstract void parseRecord() throws IOException, XmlPullParserException;
 
@@ -86,10 +84,7 @@ abstract class MmsXmlResourceParser {
     /**
      * Move XML parser forward to next event type or the end of doc
      *
-     * @param eventType
      * @return The final event type we meet
-     * @throws XmlPullParserException
-     * @throws IOException
      */
     protected int advanceToNextEvent(int eventType) throws XmlPullParserException, IOException {
         for (;;) {

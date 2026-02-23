@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +23,6 @@ import android.os.Parcelable;
 import android.text.TextUtils;
 
 import com.android.messaging.datamodel.DataModel;
-import com.android.messaging.datamodel.DataModelException;
 import com.android.messaging.datamodel.action.ActionMonitor.ActionCompletedListener;
 import com.android.messaging.datamodel.action.ActionMonitor.ActionExecutedListener;
 import com.android.messaging.util.LogUtil;
@@ -43,10 +43,10 @@ public abstract class Action implements Parcelable {
     public final String actionKey;
 
     // If derived classes keep their data in actionParameters then parcelable is trivial
-    protected Bundle actionParameters;
+    protected final Bundle actionParameters;
 
     // This does not get written to the parcel
-    private final List<Action> mBackgroundActions = new LinkedList<Action>();
+    private final List<Action> mBackgroundActions = new LinkedList<>();
 
     /**
      * Process the action locally - runs on action service thread.
@@ -69,9 +69,8 @@ public abstract class Action implements Parcelable {
 
     /**
      * Queues up background actions for background processing after the current action has
-     * completed its processing ({@link #executeAction}, {@link processBackgroundCompletion}
-     * or {@link #processBackgroundFailure}) on the Action thread.
-     * @param backgroundAction
+     * completed its processing ({@link #executeAction} or {@link #processBackgroundFailure})
+     * on the Action thread.
      */
     protected void requestBackgroundWork(final Action backgroundAction) {
         mBackgroundActions.add(backgroundAction);
@@ -95,11 +94,10 @@ public abstract class Action implements Parcelable {
     /**
      * Do work in a long running background worker thread.
      * {@link #requestBackgroundWork} needs to be called for this method to
-     * be called. {@link #processBackgroundFailure} will be called on the Action service thread
-     * if this method throws {@link DataModelException}.
+     * be called.
      * @return response that is to be passed to {@link #processBackgroundResponse}
      */
-    protected Bundle doBackgroundWork() throws DataModelException {
+    protected Bundle doBackgroundWork() {
         return null;
     }
 
@@ -245,7 +243,7 @@ public abstract class Action implements Parcelable {
      * Helper method to generate a unique operation index
      */
     protected static long getActionIdx() {
-        long idx = 0;
+        long idx;
         synchronized (sLock) {
             idx = ++sActionIdx;
         }

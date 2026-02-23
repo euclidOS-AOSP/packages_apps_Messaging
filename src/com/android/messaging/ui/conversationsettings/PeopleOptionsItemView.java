@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +19,8 @@ package com.android.messaging.ui.conversationsettings;
 import android.content.Context;
 import android.database.Cursor;
 import androidx.appcompat.widget.SwitchCompat;
-import android.text.TextUtils;
+
 import android.util.AttributeSet;
-import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -38,7 +38,7 @@ public class PeopleOptionsItemView extends LinearLayout {
      * Implemented by the host of this view that handles options click event.
      */
     public interface HostInterface {
-        void onOptionsItemViewClicked(PeopleOptionsItemData item, boolean isChecked);
+        void onOptionsItemViewClicked(PeopleOptionsItemData item);
     }
 
     private TextView mTitle;
@@ -54,15 +54,9 @@ public class PeopleOptionsItemView extends LinearLayout {
 
     @Override
     protected void onFinishInflate () {
-        mTitle = (TextView) findViewById(R.id.title);
-        mSubtitle = (TextView) findViewById(R.id.subtitle);
-        mSwitch = (SwitchCompat) findViewById(R.id.switch_button);
-        setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(final View v) {
-                mHostInterface.onOptionsItemViewClicked(mData, !mData.getChecked());
-            }
-        });
+        super.onFinishInflate();
+        mTitle = findViewById(R.id.title);
+        setOnClickListener(v -> mHostInterface.onOptionsItemViewClicked(mData));
     }
 
     public void bind(final Cursor cursor, final int columnIndex, ParticipantData otherParticipant,
@@ -72,28 +66,5 @@ public class PeopleOptionsItemView extends LinearLayout {
         mHostInterface = hostInterface;
 
         mTitle.setText(mData.getTitle());
-        final String subtitle = mData.getSubtitle();
-        if (TextUtils.isEmpty(subtitle)) {
-            mSubtitle.setVisibility(GONE);
-        } else {
-            mSubtitle.setVisibility(VISIBLE);
-            mSubtitle.setText(subtitle);
-        }
-
-        if (mData.getCheckable()) {
-            mSwitch.setVisibility(VISIBLE);
-            mSwitch.setChecked(mData.getChecked());
-        } else {
-            mSwitch.setVisibility(GONE);
-        }
-
-        final boolean enabled = mData.getEnabled();
-        if (enabled != isEnabled()) {
-            mTitle.setEnabled(enabled);
-            mSubtitle.setEnabled(enabled);
-            mSwitch.setEnabled(enabled);
-            setAlpha(enabled ? 1.0f : 0.5f);
-            setEnabled(enabled);
-        }
     }
 }

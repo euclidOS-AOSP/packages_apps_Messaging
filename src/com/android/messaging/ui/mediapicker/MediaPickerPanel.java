@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +31,6 @@ import android.widget.LinearLayout;
 
 import com.android.messaging.R;
 import com.android.messaging.ui.PagingAwareViewPager;
-import com.android.messaging.util.Assert;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.UiUtils;
 
 /**
@@ -97,8 +96,8 @@ public class MediaPickerPanel extends ViewGroup {
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
-        mTabStrip = (LinearLayout) findViewById(R.id.mediapicker_tabstrip);
-        mViewPager = (PagingAwareViewPager) findViewById(R.id.mediapicker_view_pager);
+        mTabStrip = findViewById(R.id.mediapicker_tabstrip);
+        mViewPager = findViewById(R.id.mediapicker_view_pager);
         mTouchHandler = new TouchHandler();
         setOnTouchListener(mTouchHandler);
         mViewPager.setOnTouchListener(mTouchHandler);
@@ -202,7 +201,7 @@ public class MediaPickerPanel extends ViewGroup {
     private int getDesiredHeight() {
         if (mFullScreen) {
             int fullHeight = getContext().getResources().getDisplayMetrics().heightPixels;
-            if (OsUtil.isAtLeastKLP() && isAttachedToWindow()) {
+            if (isAttachedToWindow()) {
                 // When we're attached to the window, we can get an accurate height, not necessary
                 // on older API level devices because they don't include the action bar height
                 View composeContainer =
@@ -251,12 +250,7 @@ public class MediaPickerPanel extends ViewGroup {
         }
         mFullScreen = false;
         mExpanded = expanded;
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                setDesiredHeight(getDesiredHeight(), animate);
-            }
-        });
+        mHandler.post(() -> setDesiredHeight(getDesiredHeight(), animate));
         if (expanded) {
             setupViewPager(startingPage);
             mMediaPicker.dispatchOpened();

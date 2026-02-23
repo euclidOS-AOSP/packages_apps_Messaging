@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +16,6 @@
  */
 package com.android.messaging.ui.animation;
 
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Resources;
@@ -25,16 +25,15 @@ import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
-import androidx.core.view.ViewCompat;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroupOverlay;
 import android.view.ViewOverlay;
 import android.widget.FrameLayout;
 
+import androidx.core.view.ViewCompat;
+
 import com.android.messaging.R;
-import com.android.messaging.util.ImageUtils;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.UiUtils;
 
 /**
@@ -69,20 +68,15 @@ public class ViewGroupItemVerticalExplodeAnimation {
      */
     public static void startAnimationForView(final ViewGroup container, final View viewToAnimate,
             final View animationStagingView, final boolean snapshotView, final int duration) {
-        if (OsUtil.isAtLeastJB_MR2() && (viewToAnimate.getContext() instanceof Activity)) {
+        if ((viewToAnimate.getContext() instanceof Activity)) {
             new ViewExplodeAnimationJellyBeanMR2(viewToAnimate, container, snapshotView, duration)
                 .startAnimation();
-        } else {
-            // Pre JB_MR2, this animation can cause rendering failures which causes the framework
-            // to fall back to software rendering where camera preview isn't supported (b/18264647)
-            // just skip the animation to avoid this case.
         }
     }
 
     /**
      * Implementation class for API level >= 18.
      */
-    @TargetApi(18)
     private static class ViewExplodeAnimationJellyBeanMR2 {
         private final View mViewToAnimate;
         private final ViewGroup mContainer;
@@ -107,6 +101,7 @@ public class ViewGroupItemVerticalExplodeAnimation {
         public void startAnimation() {
             final Context context = mViewToAnimate.getContext();
             final Resources resources = context.getResources();
+            final Resources.Theme theme = context.getTheme();
             final View decorView = ((Activity) context).getWindow().getDecorView();
             final ViewOverlay viewOverlay = decorView.getOverlay();
             if (viewOverlay instanceof ViewGroupOverlay) {
@@ -125,7 +120,7 @@ public class ViewGroupItemVerticalExplodeAnimation {
                 shadowContainerLayer.setBottom(containerRect.bottom);
                 shadowContainerLayer.setRight(containerRect.right);
                 shadowContainerLayer.setBackgroundColor(resources.getColor(
-                        R.color.open_conversation_animation_background_shadow));
+                        R.color.open_conversation_animation_background_shadow, theme));
                 // Per design request, temporarily clear out the background of the item content
                 // to not show any ripple effects during animation.
                 if (!(oldBackground instanceof ColorDrawable)) {
@@ -156,8 +151,8 @@ public class ViewGroupItemVerticalExplodeAnimation {
                 expandLayer.setTop(viewRect.top);
                 expandLayer.setBottom(viewRect.bottom);
                 expandLayer.setRight(viewRect.right);
-                expandLayer.setBackgroundColor(resources.getColor(
-                        R.color.conversation_background));
+                expandLayer.setBackgroundColor(resources.getColor(R.color.conversation_background,
+                        theme));
                 ViewCompat.setElevation(expandLayer, elevation);
 
                 // Conditionally stage the snapshot in the overlay.
@@ -175,17 +170,14 @@ public class ViewGroupItemVerticalExplodeAnimation {
                 expandLayer.animate().scaleY(scale)
                     .setDuration(mDuration)
                     .setInterpolator(UiUtils.EASE_IN_INTERPOLATOR)
-                    .withEndAction(new Runnable() {
-                        @Override
-                        public void run() {
-                            // Clean up the views added to overlay on animation finish.
-                            overlay.remove(shadowContainerLayer);
-                            mViewToAnimate.setBackground(oldBackground);
-                            if (mViewBitmap != null) {
-                                mViewBitmap.recycle();
-                            }
+                    .withEndAction(() -> {
+                        // Clean up the views added to overlay on animation finish.
+                        overlay.remove(shadowContainerLayer);
+                        mViewToAnimate.setBackground(oldBackground);
+                        if (mViewBitmap != null) {
+                            mViewBitmap.recycle();
                         }
-                });
+                    });
             }
         }
     }
@@ -200,9 +192,9 @@ public class ViewGroupItemVerticalExplodeAnimation {
         // Strip the view of its background when taking a snapshot so that things like touch
         // feedback don't get accidentally snapshotted.
         final Drawable viewBackground = view.getBackground();
-        ImageUtils.setBackgroundDrawableOnView(view, null);
+        view.setBackground(null);
         view.draw(new Canvas(viewBitmap));
-        ImageUtils.setBackgroundDrawableOnView(view, viewBackground);
+        view.setBackground(viewBackground);
         return viewBitmap;
     }
 }

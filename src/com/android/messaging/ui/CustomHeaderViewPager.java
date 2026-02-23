@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@
 package com.android.messaging.ui;
 
 import android.content.Context;
+
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 import androidx.viewpager.widget.ViewPager.OnPageChangeListener;
@@ -33,8 +35,8 @@ import com.android.messaging.util.Assert;
 public class CustomHeaderViewPager extends LinearLayout {
     public final static int DEFAULT_TAB_STRIP_SIZE = -1;
     private final int mDefaultTabStripSize;
-    private ViewPager mViewPager;
-    private ViewPagerTabs mTabstrip;
+    private final ViewPager mViewPager;
+    private final ViewPagerTabs mTabstrip;
 
     public CustomHeaderViewPager(final Context context, final AttributeSet attrs) {
         super(context, attrs);
@@ -43,8 +45,8 @@ public class CustomHeaderViewPager extends LinearLayout {
         inflater.inflate(R.layout.custom_header_view_pager, this, true);
         setOrientation(LinearLayout.VERTICAL);
 
-        mTabstrip = (ViewPagerTabs) findViewById(R.id.tab_strip);
-        mViewPager = (ViewPager) findViewById(R.id.pager);
+        mTabstrip = findViewById(R.id.tab_strip);
+        mViewPager = findViewById(R.id.pager);
 
         TypedValue tv = new TypedValue();
         context.getTheme().resolveAttribute(android.R.attr.actionBarSize, tv, true);
@@ -65,7 +67,7 @@ public class CustomHeaderViewPager extends LinearLayout {
         final PagerAdapter adapter = new CustomHeaderViewPagerAdapter(viewHolders);
         mViewPager.setAdapter(adapter);
         mTabstrip.setViewPager(mViewPager);
-        mViewPager.setOnPageChangeListener(new OnPageChangeListener() {
+        mViewPager.addOnPageChangeListener(new OnPageChangeListener() {
 
             @Override
             public void onPageScrollStateChanged(int state) {

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +18,18 @@ package com.android.messaging.datamodel.media;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.graphics.drawable.BitmapDrawable;
-import android.media.ExifInterface;
+import android.graphics.drawable.VectorDrawable;
 import android.net.Uri;
+import android.text.TextUtils;
+
+import androidx.core.content.res.ResourcesCompat;
+import androidx.exifinterface.media.ExifInterface;
 
 import com.android.messaging.R;
 import com.android.messaging.util.Assert;
@@ -40,12 +43,14 @@ import java.io.InputStream;
 import java.util.List;
 
 public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
-    private static Bitmap sDefaultPersonBitmap;
-    private static Bitmap sDefaultPersonBitmapLarge;
+    private static final float SCALING_FACTOR = 1.33f;
+
+    private final TypedArray mColors;
 
     public AvatarRequest(final Context context,
             final AvatarRequestDescriptor descriptor) {
         super(context, descriptor);
+        mColors = mContext.getResources().obtainTypedArray(R.array.letter_tile_colors);
     }
 
     @Override
@@ -116,39 +121,16 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
 
     private Bitmap renderDefaultAvatar(final int width, final int height) {
         final Bitmap bitmap = getBitmapPool().createOrReuseBitmap(width, height,
-                getBackgroundColor());
+                getBackgroundColor(AvatarUriUtil.getIdentifier(mDescriptor.uri)));
         final Canvas canvas = new Canvas(bitmap);
+        final VectorDrawable defaultPerson = (VectorDrawable) ResourcesCompat.getDrawable(
+                mContext.getResources(), R.drawable.ic_person_light, mContext.getTheme());
+        float dstWidth = Math.min(defaultPerson.getIntrinsicWidth() * SCALING_FACTOR, width);
+        float dstHeight = Math.min(defaultPerson.getIntrinsicHeight() * SCALING_FACTOR, height);
 
-        if (sDefaultPersonBitmap == null) {
-            final BitmapDrawable defaultPerson = (BitmapDrawable) mContext.getResources()
-                    .getDrawable(R.drawable.ic_person_light);
-            sDefaultPersonBitmap = defaultPerson.getBitmap();
-        }
-        if (sDefaultPersonBitmapLarge == null) {
-            final BitmapDrawable largeDefaultPerson = (BitmapDrawable) mContext.getResources()
-                    .getDrawable(R.drawable.ic_person_light_large);
-            sDefaultPersonBitmapLarge = largeDefaultPerson.getBitmap();
-        }
-
-        Bitmap defaultPerson = null;
-        if (mDescriptor.isWearBackground) {
-            final BitmapDrawable wearDefaultPerson = (BitmapDrawable) mContext.getResources()
-                    .getDrawable(R.drawable.ic_person_wear);
-            defaultPerson = wearDefaultPerson.getBitmap();
-        } else {
-            final boolean isLargeDefault = (width > sDefaultPersonBitmap.getWidth()) ||
-                    (height > sDefaultPersonBitmap.getHeight());
-            defaultPerson =
-                    isLargeDefault ? sDefaultPersonBitmapLarge : sDefaultPersonBitmap;
-        }
-
-        final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        final Matrix matrix = new Matrix();
-        final RectF source = new RectF(0, 0, defaultPerson.getWidth(), defaultPerson.getHeight());
-        final RectF dest = new RectF(0, 0, width, height);
-        matrix.setRectToRect(source, dest, Matrix.ScaleToFit.FILL);
-
-        canvas.drawBitmap(defaultPerson, matrix, paint);
+        canvas.translate((width - dstWidth) / 2, (height - dstHeight) / 2);
+        defaultPerson.setBounds(0, 0, (int)dstWidth, (int)dstHeight);
+        defaultPerson.draw(canvas);
 
         return bitmap;
     }
@@ -158,7 +140,7 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
         final float halfHeight = height / 2;
         final int minOfWidthAndHeight = Math.min(width, height);
         final Bitmap bitmap = getBitmapPool().createOrReuseBitmap(width, height,
-                getBackgroundColor());
+                getBackgroundColor(AvatarUriUtil.getIdentifier(mDescriptor.uri)));
         final Resources resources = mContext.getResources();
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
@@ -178,8 +160,15 @@ public class AvatarRequest extends UriImageRequest<AvatarRequestDescriptor> {
         return bitmap;
     }
 
-    private int getBackgroundColor() {
-        return mContext.getResources().getColor(R.color.primary_color);
+    private int getBackgroundColor(final String identifier) {
+        if (!TextUtils.isEmpty(identifier) &&
+                mContext.getResources().getBoolean(R.bool.contact_colors)) {
+            int idcolor = Math.abs(identifier.hashCode()) % mColors.length();
+            return mColors.getColor(idcolor,
+                     mContext.getResources().getColor(R.color.primary_color));
+        } else {
+            return mContext.getResources().getColor(R.color.primary_color);
+        }
     }
 
     @Override

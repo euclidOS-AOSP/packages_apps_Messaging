@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +54,6 @@ public class UriImageRequestDescriptor extends ImageRequestDescriptor {
      * Creates a new Uri-based image request.
      * @param uri the content Uri. Currently Bugle only supports local resources Uri (i.e. it has
      * to begin with content: or android.resource:
-     * @param circleStrokeColor
      */
     public UriImageRequestDescriptor(final Uri uri, final int desiredWidth,
             final int desiredHeight, final int sourceWidth, final int sourceHeight,
@@ -72,7 +72,7 @@ public class UriImageRequestDescriptor extends ImageRequestDescriptor {
             if (key != null) {
                 return new StringBuilder()
                     .append(uri).append(KEY_PART_DELIMITER)
-                    .append(String.valueOf(allowCompression)).append(KEY_PART_DELIMITER)
+                    .append(allowCompression).append(KEY_PART_DELIMITER)
                     .append(key).toString();
             }
         }
@@ -82,9 +82,9 @@ public class UriImageRequestDescriptor extends ImageRequestDescriptor {
     @Override
     public MediaRequest<ImageResource> buildSyncMediaRequest(final Context context) {
         if (uri == null || UriUtil.isLocalUri(uri)) {
-            return new UriImageRequest<UriImageRequestDescriptor>(context, this);
+            return new UriImageRequest<>(context, this);
         } else {
-            return new NetworkUriImageRequest<UriImageRequestDescriptor>(context, this);
+            return new NetworkUriImageRequest<>(context, this);
         }
     }
 }

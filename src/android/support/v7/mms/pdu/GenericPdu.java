@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007 Esmertec AG.
  * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +16,13 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms.pdu;
+package android.support.v7.mms.pdu;
 
 public class GenericPdu {
     /**
      * The headers of pdu.
      */
-    PduHeaders mPduHeaders = null;
+    PduHeaders mPduHeaders;
 
     /**
      * Constructor.
@@ -44,7 +45,7 @@ public class GenericPdu {
      *
      * @return A PduHeaders of this PDU.
      */
-    PduHeaders getPduHeaders() {
+    public PduHeaders getPduHeaders() {
         return mPduHeaders;
     }
 
@@ -96,7 +97,7 @@ public class GenericPdu {
      * @return the value
      */
     public EncodedStringValue getFrom() {
-       return mPduHeaders.getEncodedStringValue(PduHeaders.FROM);
+        return mPduHeaders.getEncodedStringValue(PduHeaders.FROM);
     }
 
     /**

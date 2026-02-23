@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +18,6 @@ package com.android.messaging.ui.mediapicker;
 
 import android.animation.ObjectAnimator;
 import android.animation.TimeAnimator;
-import android.animation.TimeAnimator.TimeListener;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
@@ -28,6 +28,8 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.R;
 import com.android.messaging.util.LogUtil;
@@ -104,17 +106,11 @@ public class SoundLevels extends View {
         // which might improve things further.
         mSpeechLevelsAnimator = new TimeAnimator();
         mSpeechLevelsAnimator.setRepeatCount(ObjectAnimator.INFINITE);
-        mSpeechLevelsAnimator.setTimeListener(new TimeListener() {
-            @Override
-            public void onTimeUpdate(final TimeAnimator animation, final long totalTime,
-                    final long deltaTime) {
-                invalidate();
-            }
-        });
+        mSpeechLevelsAnimator.setTimeListener((animation, totalTime, deltaTime) -> invalidate());
     }
 
     @Override
-    protected void onDraw(final Canvas canvas) {
+    protected void onDraw(@NonNull final Canvas canvas) {
         if (!mIsEnabled) {
             return;
         }

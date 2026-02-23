@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +20,8 @@ package com.android.messaging.datamodel.action;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import androidx.annotation.NonNull;
+
 import com.android.messaging.datamodel.BugleDatabaseOperations;
 import com.android.messaging.datamodel.DataModel;
 import com.android.messaging.datamodel.DatabaseWrapper;
@@ -28,7 +31,6 @@ import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.Assert.RunsOnMainThread;
 import com.android.messaging.util.LogUtil;
-import com.google.common.annotations.VisibleForTesting;
 
 public class ReadDraftDataAction extends Action implements Parcelable {
 
@@ -37,11 +39,11 @@ public class ReadDraftDataAction extends Action implements Parcelable {
      */
     public interface ReadDraftDataActionListener {
         @RunsOnMainThread
-        abstract void onReadDraftDataSucceeded(final ReadDraftDataAction action,
-                final Object data, final MessageData message,
-                final ConversationListItemData conversation);
+        void onReadDraftDataSucceeded(final ReadDraftDataAction action,
+                                      final Object data, final MessageData message,
+                                      final ConversationListItemData conversation);
         @RunsOnMainThread
-        abstract void onReadDraftDataFailed(final ReadDraftDataAction action, final Object data);
+        void onReadDraftDataFailed(final ReadDraftDataAction action, final Object data);
     }
 
     /**
@@ -68,7 +70,6 @@ public class ReadDraftDataAction extends Action implements Parcelable {
         actionParameters.putParcelable(KEY_INCOMING_DRAFT, incomingDraft);
     }
 
-    @VisibleForTesting
     class DraftData {
         public final MessageData message;
         public final ConversationListItemData conversation;
@@ -83,7 +84,8 @@ public class ReadDraftDataAction extends Action implements Parcelable {
     protected Object executeAction() {
         final DatabaseWrapper db = DataModel.get().getDatabase();
         final String conversationId = actionParameters.getString(KEY_CONVERSATION_ID);
-        final MessageData incomingDraft = actionParameters.getParcelable(KEY_INCOMING_DRAFT);
+        final MessageData incomingDraft = actionParameters.getParcelable(KEY_INCOMING_DRAFT,
+                MessageData.class);
         final ConversationListItemData conversation =
                 ConversationListItemData.getExistingConversation(db, conversationId);
         MessageData message = null;
@@ -147,7 +149,7 @@ public class ReadDraftDataAction extends Action implements Parcelable {
     }
 
     public static final Parcelable.Creator<ReadDraftDataAction> CREATOR
-            = new Parcelable.Creator<ReadDraftDataAction>() {
+            = new Parcelable.Creator<>() {
         @Override
         public ReadDraftDataAction createFromParcel(final Parcel in) {
             return new ReadDraftDataAction(in);
@@ -160,7 +162,7 @@ public class ReadDraftDataAction extends Action implements Parcelable {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

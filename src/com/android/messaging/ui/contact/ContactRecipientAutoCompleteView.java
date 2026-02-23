@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +18,11 @@ package com.android.messaging.ui.contact;
 
 import android.content.Context;
 import android.database.Cursor;
+import android.graphics.Color;
 import android.graphics.Rect;
-import android.os.AsyncTask;
+import android.graphics.drawable.Drawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextPaint;
 import android.text.TextWatcher;
@@ -28,6 +32,10 @@ import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
 import android.widget.TextView;
+
+import androidx.core.content.ContextCompat;
+import androidx.core.content.res.ResourcesCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
 
 import com.android.ex.chips.RecipientEditTextView;
 import com.android.ex.chips.RecipientEntry;
@@ -42,6 +50,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
@@ -56,7 +65,6 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
         void onEntryComplete();
     }
 
-    private final int mTextHeight;
     private ContactChipsChangeListener mChipsChangeListener;
 
     /**
@@ -107,14 +115,18 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
         final Rect textBounds = new Rect(0, 0, 0, 0);
         final TextPaint paint = getPaint();
         paint.getTextBounds(TEXT_HEIGHT_SAMPLE, 0, TEXT_HEIGHT_SAMPLE.length(), textBounds);
-        mTextHeight = textBounds.height();
 
         setTokenizer(new Rfc822Tokenizer());
         addTextChangedListener(new ContactChipsWatcher());
         setOnFocusListShrinkRecipients(false);
 
-        setBackground(context.getResources().getDrawable(
-                androidx.appcompat.R.drawable.abc_textfield_search_default_mtrl_alpha));
+        Drawable drawable = ResourcesCompat.getDrawable(context.getResources(),
+                androidx.appcompat.R.drawable.abc_textfield_search_default_mtrl_alpha,
+                context.getTheme());
+        int drawableColor = ContextCompat.getColor(context, android.R.color.white);
+        DrawableCompat.setTint(drawable.mutate(), drawableColor);
+
+        setBackground(drawable);
     }
 
     public void setContactChipsListener(final ContactChipsChangeListener listener) {
@@ -137,66 +149,81 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
     }
 
     /**
-     * An AsyncTask that cleans up contact chips on every chips commit (i.e. get or create a new
+     * A class that cleans up contact chips on every chips commit (i.e. get or create a new
      * conversation with the given chips).
      */
-    private class AsyncContactChipSanitizeTask extends
-            AsyncTask<Void, ChipReplacementTuple, Integer> {
+    private class AsyncContactChipSanitizeTask {
 
-        @Override
-        protected Integer doInBackground(final Void... params) {
-            final DrawableRecipientChip[] recips = getText()
-                    .getSpans(0, getText().length(), DrawableRecipientChip.class);
-            int invalidChipsRemoved = 0;
-            for (final DrawableRecipientChip recipient : recips) {
-                final RecipientEntry entry = recipient.getEntry();
-                if (entry != null) {
-                    if (entry.isValid()) {
-                        if (RecipientEntry.isCreatedRecipient(entry.getContactId()) ||
-                                ContactRecipientEntryUtils.isSendToDestinationContact(entry)) {
-                            // This is a generated/send-to contact chip, try to look it up and
-                            // display a chip for the corresponding local contact.
-                            try (final Cursor lookupResult =
-                                    ContactUtil.lookupDestination(
-                                                    getContext(), entry.getDestination())
-                                            .performSynchronousQuery()) {
-                                if (lookupResult != null && lookupResult.moveToNext()) {
-                                    // Found a match, remove the generated entry and replace with a
-                                    // better local entry.
-                                    publishProgress(
-                                            new ChipReplacementTuple(
-                                                    recipient,
-                                                    ContactUtil.createRecipientEntryForPhoneQuery(
-                                                            lookupResult, true)));
-                                } else if (PhoneUtils.isValidSmsMmsDestination(
-                                        entry.getDestination())) {
-                                    // No match was found, but we have a valid destination so let's
-                                    // at least create an entry that shows an avatar.
-                                    publishProgress(
-                                            new ChipReplacementTuple(
-                                                    recipient,
-                                                    ContactRecipientEntryUtils
-                                                            .constructNumberWithAvatarEntry(
-                                                                    entry.getDestination())));
-                                } else {
-                                    // Not a valid contact. Remove and show an error.
-                                    publishProgress(new ChipReplacementTuple(recipient, null));
-                                    invalidChipsRemoved++;
+        private ExecutorService mExecutor = Executors.newSingleThreadExecutor();
+        private Handler mHandler = new Handler(Looper.getMainLooper());
+        private boolean mIsCancelled;
+
+        protected void execute() {
+            mExecutor.execute(() -> {
+                final DrawableRecipientChip[] recips = getText()
+                        .getSpans(0, getText().length(), DrawableRecipientChip.class);
+                int invalidChipsRemoved = 0;
+                for (final DrawableRecipientChip recipient : recips) {
+                    if (mIsCancelled) {
+                        break;
+                    }
+                    final RecipientEntry entry = recipient.getEntry();
+                    if (entry != null) {
+                        if (entry.isValid()) {
+                            if (RecipientEntry.isCreatedRecipient(entry.getContactId()) ||
+                                    ContactRecipientEntryUtils.isSendToDestinationContact(entry)) {
+                                // This is a generated/send-to contact chip, try to look it up and
+                                // display a chip for the corresponding local contact.
+                                try (final Cursor lookupResult = ContactUtil.lookupDestination(
+                                        getContext(), entry.getDestination())
+                                        .performSynchronousQuery()) {
+                                    if (mIsCancelled) {
+                                        break;
+                                    }
+                                    if (lookupResult != null && lookupResult.moveToNext()) {
+                                        // Found a match, remove the generated entry and replace
+                                        // with abetter local entry.
+                                        publishProgress(
+                                                new ChipReplacementTuple(recipient,
+                                                        ContactUtil.
+                                                                createRecipientEntryForPhoneQuery(
+                                                                        lookupResult, true)));
+                                    } else if (PhoneUtils.isValidSmsMmsDestination(
+                                            entry.getDestination())) {
+                                        // No match was found, but we have a valid destination so
+                                        // let's at least create an entry that shows an avatar.
+                                        publishProgress(
+                                                new ChipReplacementTuple(
+                                                        recipient,
+                                                        ContactRecipientEntryUtils
+                                                                .constructNumberWithAvatarEntry(
+                                                                        entry.getDestination())));
+                                    } else {
+                                        // Not a valid contact. Remove and show an error.
+                                        publishProgress(new ChipReplacementTuple(recipient, null));
+                                        invalidChipsRemoved++;
+                                    }
                                 }
                             }
+                        } else {
+                            publishProgress(new ChipReplacementTuple(recipient, null));
+                            invalidChipsRemoved++;
                         }
-                    } else {
-                        publishProgress(new ChipReplacementTuple(recipient, null));
-                        invalidChipsRemoved++;
                     }
                 }
-            }
-            return invalidChipsRemoved;
+
+                final int finalInvalidChipsRemoved = invalidChipsRemoved;
+                mHandler.post(() -> {
+                    mCurrentSanitizeTask = null;
+                    if (finalInvalidChipsRemoved > 0) {
+                        mChipsChangeListener.onInvalidContactChipsPruned(finalInvalidChipsRemoved);
+                    }
+                });
+            });
         }
 
-        @Override
-        protected void onProgressUpdate(final ChipReplacementTuple... values) {
-            for (final ChipReplacementTuple tuple : values) {
+        private void publishProgress(final ChipReplacementTuple tuple) {
+            mHandler.post(() -> {
                 if (tuple.removedChip != null) {
                     final Editable text = getText();
                     final int chipStart = text.getSpanStart(tuple.removedChip);
@@ -209,23 +236,17 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
                         appendRecipientEntry(tuple.replacedChipEntry);
                     }
                 }
-            }
+            });
         }
 
-        @Override
-        protected void onPostExecute(final Integer invalidChipsRemoved) {
-            mCurrentSanitizeTask = null;
-            if (invalidChipsRemoved > 0) {
-                mChipsChangeListener.onInvalidContactChipsPruned(invalidChipsRemoved);
-            }
+        public void cancel() {
+            mIsCancelled = true;
+        }
+
+        public boolean isCancelled() {
+            return mIsCancelled;
         }
     }
-
-    /**
-     * We don't use SafeAsyncTask but instead use a single threaded executor to ensure that
-     * all sanitization tasks are serially executed so as not to interfere with each other.
-     */
-    private static final Executor SANITIZE_EXECUTOR = Executors.newSingleThreadExecutor();
 
     private AsyncContactChipSanitizeTask mCurrentSanitizeTask;
 
@@ -241,11 +262,11 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
      */
     private void sanitizeContactChips() {
         if (mCurrentSanitizeTask != null && !mCurrentSanitizeTask.isCancelled()) {
-            mCurrentSanitizeTask.cancel(false);
+            mCurrentSanitizeTask.cancel();
             mCurrentSanitizeTask = null;
         }
         mCurrentSanitizeTask = new AsyncContactChipSanitizeTask();
-        mCurrentSanitizeTask.executeOnExecutor(SANITIZE_EXECUTOR);
+        mCurrentSanitizeTask.execute();
     }
 
     /**
@@ -255,8 +276,7 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
     public ArrayList<ParticipantData> getRecipientParticipantDataForConversationCreation() {
         final DrawableRecipientChip[] recips = getText()
                 .getSpans(0, getText().length(), DrawableRecipientChip.class);
-        final ArrayList<ParticipantData> contacts =
-                new ArrayList<ParticipantData>(recips.length);
+        final ArrayList<ParticipantData> contacts = new ArrayList<>(recips.length);
         for (final DrawableRecipientChip recipient : recips) {
             final RecipientEntry entry = recipient.getEntry();
             if (entry != null && entry.isValid() && entry.getDestination() != null &&
@@ -273,7 +293,7 @@ public class ContactRecipientAutoCompleteView extends RecipientEditTextView {
      * consumer with determining quickly whether a contact is currently selected.
      */
     public Set<String> getSelectedDestinations() {
-        Set<String> set = new HashSet<String>();
+        Set<String> set = new HashSet<>();
         final DrawableRecipientChip[] recips = getText()
                 .getSpans(0, getText().length(), DrawableRecipientChip.class);
 

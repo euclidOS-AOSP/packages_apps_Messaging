@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +26,6 @@ import android.provider.ContactsContract.Contacts;
 import com.android.messaging.util.FallbackStrategies;
 import com.android.messaging.util.FallbackStrategies.Strategy;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 
 /**
  * Helper for querying frequent (and/or starred) contacts.
@@ -53,7 +53,7 @@ public class FrequentContactsCursorQueryData extends CursorQueryData {
 
         private abstract class StrequentContactsQueryStrategy implements Strategy<Void, Cursor> {
             @Override
-            public Cursor execute(Void params) throws Exception {
+            public Cursor execute(Void params) {
                 final Uri uri = getUri();
                 if (uri != null) {
                     setUri(uri);
@@ -90,9 +90,7 @@ public class FrequentContactsCursorQueryData extends CursorQueryData {
                 // queries. Using strequent_phone_only query as a fallback to display only phone
                 // contacts. This is the last-ditch effort; if this fails, we will display an
                 // empty frequent list (b/18354836).
-                final String strequentQueryParam = OsUtil.isAtLeastL() ?
-                        ContactsContract.STREQUENT_PHONE_ONLY : "strequent_phone_only";
-                // TODO: Handle enterprise contacts post M once contacts provider supports it
+                final String strequentQueryParam = ContactsContract.STREQUENT_PHONE_ONLY;
                 return Contacts.CONTENT_STREQUENT_URI.buildUpon()
                         .appendQueryParameter(strequentQueryParam, "true").build();
             }

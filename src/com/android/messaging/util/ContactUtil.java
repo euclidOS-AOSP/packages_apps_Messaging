@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,6 @@ package com.android.messaging.util;
 
 import android.Manifest;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
@@ -34,18 +34,15 @@ import android.text.TextUtils;
 import android.view.View;
 
 import com.android.ex.chips.RecipientEntry;
-import com.android.messaging.Factory;
 import com.android.messaging.datamodel.CursorQueryData;
 import com.android.messaging.datamodel.FrequentContactsCursorQueryData;
 import com.android.messaging.datamodel.data.ParticipantData;
 import com.android.messaging.sms.MmsSmsUtils;
 import com.android.messaging.ui.contact.AddContactsConfirmationDialog;
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Utility class including logic to list, filter, and lookup phone and emails in CP2.
  */
-@VisibleForTesting
 public class ContactUtil {
 
     /**
@@ -209,7 +206,6 @@ public class ContactUtil {
         }
     }
 
-    @VisibleForTesting
     public static CursorQueryData getSelf(final Context context) {
         if (!ContactUtil.hasReadContactsPermission()) {
             return CursorQueryData.getEmptyQueryData();
@@ -222,7 +218,6 @@ public class ContactUtil {
      * Get a list of phones sorted by contact name. One contact may have multiple phones.
      * In that case, each phone will be returned as a separate record in the result cursor.
      */
-    @VisibleForTesting
     public static CursorQueryData getPhones(final Context context) {
         if (!ContactUtil.hasReadContactsPermission()) {
             return CursorQueryData.getEmptyQueryData();
@@ -292,7 +287,6 @@ public class ContactUtil {
      * NOTE: This is visible for testing only, clients should only call filterDestination() since
      * we support email addresses as well.
      */
-    @VisibleForTesting
     public static CursorQueryData filterPhones(final Context context, final String query) {
         return filterPhonesInternal(context, Phone.CONTENT_FILTER_URI, query, Directory.DEFAULT);
     }
@@ -324,7 +318,6 @@ public class ContactUtil {
      * NOTE: This is visible for testing only, clients should only call lookupDestination() since
      * we support email addresses as well.
      */
-    @VisibleForTesting
     public static CursorQueryData lookupPhone(final Context context, final String phone) {
         if (!ContactUtil.hasReadContactsPermission()) {
             return CursorQueryData.getEmptyQueryData();
@@ -356,7 +349,6 @@ public class ContactUtil {
      * NOTE: This is visible for testing only, clients should only call filterDestination() since
      * we support email addresses as well.
      */
-    @VisibleForTesting
     public static CursorQueryData filterEmails(final Context context, final String query) {
         return filterEmailsInternal(context, Email.CONTENT_FILTER_URI, query, Directory.DEFAULT);
     }
@@ -389,7 +381,6 @@ public class ContactUtil {
      * NOTE: This is visible for testing only, clients should only call lookupDestination() since
      * we support email addresses as well.
      */
-    @VisibleForTesting
     public static CursorQueryData lookupEmail(final Context context, final String email) {
         if (!ContactUtil.hasReadContactsPermission()) {
             return CursorQueryData.getEmptyQueryData();
@@ -445,16 +436,10 @@ public class ContactUtil {
             return null;
         }
         String firstName = null;
-        Cursor nameCursor = null;
-        try {
-            nameCursor = ContactUtil.lookupStructuredName(context, contactId, true)
-                    .performSynchronousQuery();
+        try (Cursor nameCursor = ContactUtil.lookupStructuredName(context, contactId, true)
+                .performSynchronousQuery()) {
             if (nameCursor != null && nameCursor.moveToFirst()) {
                 firstName = nameCursor.getString(ContactUtil.INDEX_STRUCTURED_NAME_GIVEN_NAME);
-            }
-        } finally {
-            if (nameCursor != null) {
-                nameCursor.close();
             }
         }
         return firstName;
@@ -519,27 +504,21 @@ public class ContactUtil {
      * Returns if a given contact id belongs to managed profile.
      */
     public static boolean isEnterpriseContactId(final long contactId) {
-        return OsUtil.isAtLeastL() && ContactsContract.Contacts.isEnterpriseContactId(contactId);
+        return ContactsContract.Contacts.isEnterpriseContactId(contactId);
     }
 
     /**
      * Returns Email lookup uri that will query both primary and corp profile
      */
     private static Uri getEmailContentLookupUri() {
-        if (OsUtil.isAtLeastM()) {
-            return Email.ENTERPRISE_CONTENT_LOOKUP_URI;
-        }
-        return Email.CONTENT_LOOKUP_URI;
+        return Email.ENTERPRISE_CONTENT_LOOKUP_URI;
     }
 
     /**
      * Returns PhoneLookup URI.
      */
     public static Uri getPhoneLookupUri() {
-        if (OsUtil.isAtLeastM()) {
-            return PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI;
-        }
-        return PhoneLookup.CONTENT_FILTER_URI;
+        return PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI;
     }
 
     public static boolean hasReadContactsPermission() {

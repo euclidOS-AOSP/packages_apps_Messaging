@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -22,7 +23,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.Build;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -349,16 +349,7 @@ class MmsNetworkManager {
      * @return The change's network type
      */
     private static int getConnectivityChangeNetworkType(final Intent intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            return intent.getIntExtra(ConnectivityManager.EXTRA_NETWORK_TYPE, TYPE_NONE);
-        } else {
-            final NetworkInfo info = intent.getParcelableExtra(
-                    ConnectivityManager.EXTRA_NETWORK_INFO);
-            if (info != null) {
-                return info.getType();
-            }
-        }
-        return TYPE_NONE;
+        return intent.getIntExtra(ConnectivityManager.EXTRA_NETWORK_TYPE, TYPE_NONE);
     }
 
     private static String getMmsConnectivityResultString(int result) {

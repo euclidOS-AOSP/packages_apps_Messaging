@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +18,12 @@
 package com.android.messaging.datamodel;
 
 import android.provider.BaseColumns;
+import android.support.v7.mms.pdu.ContentType;
 
 import com.android.ex.photo.provider.PhotoContract.PhotoViewColumns;
-
 import com.android.messaging.datamodel.DatabaseHelper.MessageColumns;
 import com.android.messaging.datamodel.DatabaseHelper.PartColumns;
 import com.android.messaging.datamodel.DatabaseHelper.ParticipantColumns;
-import com.android.messaging.util.ContentType;
 
 /**
  * View for the image parts for the conversation. It is used to provide the photoviewer with a
@@ -87,7 +87,7 @@ public class ConversationImagePartsView {
     }
 
     public interface PhotoViewQuery {
-        public final String[] PROJECTION = {
+        String[] PROJECTION = {
             PhotoViewColumns.URI,
             PhotoViewColumns.NAME,
             PhotoViewColumns.CONTENT_URI,
@@ -99,22 +99,22 @@ public class ConversationImagePartsView {
             Columns.STATUS,
         };
 
-        public final int INDEX_URI = 0;
-        public final int INDEX_SENDER_FULL_NAME = 1;
-        public final int INDEX_CONTENT_URI = 2;
-        public final int INDEX_THUMBNAIL_URI = 3;
-        public final int INDEX_CONTENT_TYPE = 4;
+        int INDEX_URI = 0;
+        int INDEX_SENDER_FULL_NAME = 1;
+        int INDEX_CONTENT_URI = 2;
+        int INDEX_THUMBNAIL_URI = 3;
+        int INDEX_CONTENT_TYPE = 4;
         // Columns in addition to those specified by PhotoContract
-        public final int INDEX_DISPLAY_DESTINATION = 5;
-        public final int INDEX_RECEIVED_TIMESTAMP = 6;
-        public final int INDEX_STATUS = 7;
+        int INDEX_DISPLAY_DESTINATION = 5;
+        int INDEX_RECEIVED_TIMESTAMP = 6;
+        int INDEX_STATUS = 7;
     }
 
-    static final String getViewName() {
+    static String getViewName() {
         return VIEW_NAME;
     }
 
-    static final String getCreateSql() {
+    static String getCreateSql() {
         return CREATE_SQL;
     }
 }

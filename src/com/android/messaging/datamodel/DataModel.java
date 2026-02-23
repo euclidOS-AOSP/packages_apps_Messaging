@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +36,6 @@ import com.android.messaging.datamodel.data.ConversationData.ConversationDataLis
 import com.android.messaging.datamodel.data.ConversationListData;
 import com.android.messaging.datamodel.data.ConversationListData.ConversationListDataListener;
 import com.android.messaging.datamodel.data.DraftMessageData;
-import com.android.messaging.datamodel.data.GalleryGridItemData;
 import com.android.messaging.datamodel.data.LaunchConversationData;
 import com.android.messaging.datamodel.data.LaunchConversationData.LaunchConversationDataListener;
 import com.android.messaging.datamodel.data.MediaPickerData;
@@ -59,12 +59,11 @@ public abstract class DataModel {
         return Factory.get().getDataModel();
     }
 
-    public static final void startActionService(final Action action) {
+    public static void startActionService(final Action action) {
         get().getActionService().startAction(action);
     }
 
-    public static final void scheduleAction(final Action action,
-            final int code, final long delayMs) {
+    public static void scheduleAction(final Action action, final int code, final long delayMs) {
         get().getActionService().scheduleAction(action, code, delayMs);
     }
 
@@ -80,8 +79,6 @@ public abstract class DataModel {
             final ContactPickerDataListener listener);
 
     public abstract MediaPickerData createMediaPickerData(final Context context);
-
-    public abstract GalleryGridItemData createGalleryGridItemData();
 
     public abstract LaunchConversationData createLaunchConversationData(
             LaunchConversationDataListener listener);

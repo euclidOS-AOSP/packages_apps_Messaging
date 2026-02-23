@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +24,14 @@ import android.database.MatrixCursor;
 import android.database.MatrixCursor.RowBuilder;
 import android.net.Uri;
 import android.provider.OpenableColumns;
+
+import androidx.annotation.NonNull;
 import androidx.collection.SimpleArrayMap;
 import android.text.TextUtils;
 
 import com.android.messaging.Factory;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.LogUtil;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,10 +43,8 @@ import java.util.List;
 public class MediaScratchFileProvider extends FileProvider {
     private static final String TAG = LogUtil.BUGLE_TAG;
 
-    private static final SimpleArrayMap<Uri, String> sUriToDisplayNameMap =
-            new SimpleArrayMap<Uri, String>();
+    private static final SimpleArrayMap<Uri, String> sUriToDisplayNameMap = new SimpleArrayMap<>();
 
-    @VisibleForTesting
     public static final String AUTHORITY =
             "com.android.messaging.datamodel.MediaScratchFileProvider";
     private static final String MEDIA_SCRATCH_SPACE_DIR = "mediascratchspace";
@@ -114,8 +114,8 @@ public class MediaScratchFileProvider extends FileProvider {
     }
 
     @Override
-    public Cursor query(final Uri uri, final String[] projection, final String selection,
-            final String[] selectionArgs, final String sortOrder) {
+    public Cursor query(@NonNull final Uri uri, final String[] projection, final String selection,
+                        final String[] selectionArgs, final String sortOrder) {
         if (projection != null && projection.length > 0 &&
                 TextUtils.equals(projection[0], OpenableColumns.DISPLAY_NAME) &&
                 isMediaScratchSpaceUri(uri)) {

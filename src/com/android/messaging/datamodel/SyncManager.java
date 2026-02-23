@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +28,6 @@ import com.android.messaging.datamodel.action.SyncMessagesAction;
 import com.android.messaging.datamodel.data.ParticipantData;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.BuglePrefs;
 import com.android.messaging.util.BuglePrefsKeys;
@@ -51,32 +51,13 @@ public class SyncManager {
      */
     public static class ConversationCustomization {
         private final boolean mArchived;
-        private final boolean mMuted;
-        private final boolean mNoVibrate;
-        private final String mNotificationSoundUri;
 
-        public ConversationCustomization(final boolean archived, final boolean muted,
-                final boolean noVibrate, final String notificationSoundUri) {
+        public ConversationCustomization(final boolean archived) {
             mArchived = archived;
-            mMuted = muted;
-            mNoVibrate = noVibrate;
-            mNotificationSoundUri = notificationSoundUri;
         }
 
         public boolean isArchived() {
             return mArchived;
-        }
-
-        public boolean isMuted() {
-            return mMuted;
-        }
-
-        public boolean noVibrate() {
-            return mNoVibrate;
-        }
-
-        public String getNotificationSoundUri() {
-            return mNotificationSoundUri;
         }
     }
 
@@ -186,10 +167,8 @@ public class SyncManager {
      * @return - true if sync should start
      */
     public synchronized boolean shouldSync(final boolean full, final long startTimestamp) {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "SyncManager: Checking shouldSync " + (full ? "full " : "")
-                    + "at " + startTimestamp);
-        }
+        LogUtil.v(TAG, "SyncManager: Checking shouldSync " + (full ? "full " : "")
+                + "at " + startTimestamp);
 
         if (full) {
             final long delayUntilFullSync = delayUntilFullSync(startTimestamp);
@@ -225,13 +204,11 @@ public class SyncManager {
      * @return 0 if allowed to run now, else delay in ms
      */
     public long delayUntilFullSync(final long startTimestamp) {
-        final BugleGservices bugleGservices = BugleGservices.get();
         final BuglePrefs prefs = BuglePrefs.getApplicationPrefs();
 
         final long lastFullSyncTime = prefs.getLong(BuglePrefsKeys.LAST_FULL_SYNC_TIME, -1L);
-        final long smsFullSyncBackoffTimeMillis = bugleGservices.getLong(
-                BugleGservicesKeys.SMS_FULL_SYNC_BACKOFF_TIME_MILLIS,
-                BugleGservicesKeys.SMS_FULL_SYNC_BACKOFF_TIME_MILLIS_DEFAULT);
+        final long smsFullSyncBackoffTimeMillis =
+                BugleGservicesKeys.SMS_FULL_SYNC_BACKOFF_TIME_MILLIS_DEFAULT;
         final long noFullSyncBefore = (lastFullSyncTime < 0 ? startTimestamp :
             lastFullSyncTime + smsFullSyncBackoffTimeMillis);
 
@@ -363,11 +340,9 @@ public class SyncManager {
         @Override
         public void onChange(final boolean selfChange, final Uri uri) {
             // Handle change.
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "SyncManager: Sms/Mms DB changed @" + System.currentTimeMillis()
-                        + " for " + (uri == null ? "<unk>" : uri.toString()) + " "
-                        + mSyncOnChanges + "/" + mNotifyOnChanges);
-            }
+            LogUtil.v(TAG, "SyncManager: Sms/Mms DB changed @" + System.currentTimeMillis()
+                    + " for " + (uri == null ? "<unk>" : uri.toString()) + " "
+                    + mSyncOnChanges + "/" + mNotifyOnChanges);
 
             if (mSyncOnChanges) {
                 // If sync is already running this will do nothing - but at end of each sync
@@ -386,12 +361,10 @@ public class SyncManager {
 
     public static class ThreadInfoCache {
         // Cache of thread->conversationId map
-        private final LongSparseArray<String> mThreadToConversationId =
-                new LongSparseArray<String>();
+        private final LongSparseArray<String> mThreadToConversationId = new LongSparseArray<>();
 
         // Cache of thread->recipients map
-        private final LongSparseArray<List<String>> mThreadToRecipients =
-                new LongSparseArray<List<String>>();
+        private final LongSparseArray<List<String>> mThreadToRecipients = new LongSparseArray<>();
 
         // Remember the conversation ids that need to be archived
         private final HashSet<String> mArchivedConversations = new HashSet<>();
@@ -436,15 +409,13 @@ public class SyncManager {
             if (customization != null) {
                 // There is user customization we need to recover
                 conversationId = BugleDatabaseOperations.getOrCreateConversation(db, threadId,
-                        customization.isArchived(), participants, customization.isMuted(),
-                        customization.noVibrate(), customization.getNotificationSoundUri());
+                        customization.isArchived(), participants);
                 if (customization.isArchived()) {
                     mArchivedConversations.add(conversationId);
                 }
             } else {
                 conversationId = BugleDatabaseOperations.getOrCreateConversation(db, threadId,
-                        false/*archived*/, participants, false/*noNotification*/,
-                        false/*noVibrate*/, null/*soundUri*/);
+                        false/*archived*/, participants);
             }
 
             if (conversationId != null) {
@@ -459,8 +430,6 @@ public class SyncManager {
         /**
          * Load the recipients of a thread from telephony provider. If we fail, use
          * a predefined unknown recipient. This should not return null.
-         *
-         * @param threadId
          */
         public synchronized List<String> getThreadRecipients(final long threadId) {
             List<String> recipients = mThreadToRecipients.get(threadId);

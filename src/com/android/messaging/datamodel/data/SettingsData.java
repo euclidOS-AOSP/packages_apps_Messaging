@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +17,14 @@
 
 package com.android.messaging.datamodel.data;
 
-import android.app.LoaderManager;
 import android.content.Context;
-import android.content.Loader;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.text.TextUtils;
+
+import androidx.annotation.NonNull;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.content.Loader;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.BoundCursorLoader;
@@ -31,7 +34,6 @@ import com.android.messaging.datamodel.binding.BindableData;
 import com.android.messaging.datamodel.binding.BindingBase;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -127,6 +129,7 @@ public class SettingsData extends BindableData implements
 
     private static final int SELF_PARTICIPANT_LOADER = 1;
 
+    @NonNull
     @Override
     public Loader<Cursor> onCreateLoader(final int id, final Bundle args) {
         Assert.equals(SELF_PARTICIPANT_LOADER, id);
@@ -148,7 +151,7 @@ public class SettingsData extends BindableData implements
     }
 
     @Override
-    public void onLoadFinished(final Loader<Cursor> generic, final Cursor data) {
+    public void onLoadFinished(@NonNull final Loader<Cursor> generic, final Cursor data) {
         final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
         // Check if data still bound to the requesting ui element
@@ -193,14 +196,14 @@ public class SettingsData extends BindableData implements
 
     public List<SettingsItem> getSettingsItems() {
         final List<ParticipantData> selfs = mSelfParticipantsData.getSelfParticipants(true);
-        final List<SettingsItem> settingsItems = new ArrayList<SettingsItem>();
+        final List<SettingsItem> settingsItems = new ArrayList<>();
         // First goes the general settings, followed by per-subscription settings.
         settingsItems.add(SettingsItem.createGeneralSettingsItem(mContext));
         // For per-subscription settings, show the actual SIM name with phone number if the
         // platorm is at least L-MR1 and there are multiple active SIMs.
         final int activeSubCountExcludingDefault =
                 mSelfParticipantsData.getSelfParticipantsCountExcludingDefault(true);
-        if (OsUtil.isAtLeastL_MR1() && activeSubCountExcludingDefault > 0) {
+        if (activeSubCountExcludingDefault > 0) {
             for (ParticipantData self : selfs) {
                 if (!self.isDefaultSelf()) {
                     if (activeSubCountExcludingDefault > 1) {

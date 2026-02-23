@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +18,6 @@ package com.android.messaging.util;
 
 import android.content.Context;
 import android.content.res.Resources;
-import androidx.core.view.accessibility.AccessibilityEventCompat;
-import androidx.core.view.accessibility.AccessibilityRecordCompat;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
@@ -30,25 +29,10 @@ import com.android.messaging.R;
 import javax.annotation.Nullable;
 
 public class AccessibilityUtil {
-    public static String sContentDescriptionDivider;
-
     public static boolean isTouchExplorationEnabled(final Context context) {
         final AccessibilityManager accessibilityManager = (AccessibilityManager)
                 context.getSystemService(Context.ACCESSIBILITY_SERVICE);
         return accessibilityManager.isTouchExplorationEnabled();
-    }
-
-    public static StringBuilder appendContentDescription(final Context context,
-            final StringBuilder contentDescription, final String val) {
-        if (sContentDescriptionDivider == null) {
-            sContentDescriptionDivider =
-                    context.getResources().getString(R.string.enumeration_comma);
-        }
-        if (contentDescription.length() != 0) {
-            contentDescription.append(sContentDescriptionDivider);
-        }
-        contentDescription.append(val);
-        return contentDescription;
     }
 
     public static void announceForAccessibilityCompat(
@@ -73,8 +57,7 @@ public class AccessibilityUtil {
         }
 
         // Jelly Bean added support for speaking text verbatim
-        final int eventType = OsUtil.isAtLeastJB() ? AccessibilityEvent.TYPE_ANNOUNCEMENT
-                : AccessibilityEvent.TYPE_VIEW_FOCUSED;
+        final int eventType = AccessibilityEvent.TYPE_ANNOUNCEMENT;
 
         // Construct an accessibility event with the minimum recommended
         // attributes. An event without a class name or package may be dropped.
@@ -83,10 +66,7 @@ public class AccessibilityUtil {
         event.setEnabled(view.isEnabled());
         event.setClassName(view.getClass().getName());
         event.setPackageName(context.getPackageName());
-
-        // JellyBean MR1 requires a source view to set the window ID.
-        final AccessibilityRecordCompat record = AccessibilityEventCompat.asRecord(event);
-        record.setSource(view);
+        event.setSource(view);
 
         // Sends the event directly through the accessibility manager. If we only supported SDK 14+
         // we could have done:
@@ -101,11 +81,7 @@ public class AccessibilityUtil {
      * @return boolean Boolean indicating whether the currently locale is RTL.
      */
     public static boolean isLayoutRtl(final View view) {
-        if (OsUtil.isAtLeastJB_MR1()) {
-            return View.LAYOUT_DIRECTION_RTL == view.getLayoutDirection();
-        } else {
-            return false;
-        }
+        return View.LAYOUT_DIRECTION_RTL == view.getLayoutDirection();
     }
 
     public static String getVocalizedPhoneNumber(final Resources res, final String phoneNumber) {

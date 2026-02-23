@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.app.PendingIntent;
 import android.content.ContentResolver;
@@ -100,38 +101,36 @@ class SendRequest extends MmsRequest {
         if (contentUri == null) {
             return null;
         }
-        final Callable<byte[]> copyPduToArray = new Callable<byte[]>() {
-            public byte[] call() {
-                ParcelFileDescriptor.AutoCloseInputStream inStream = null;
-                try {
-                    final ContentResolver cr = context.getContentResolver();
-                    final ParcelFileDescriptor pduFd = cr.openFileDescriptor(contentUri, "r");
-                    inStream = new ParcelFileDescriptor.AutoCloseInputStream(pduFd);
-                    // Request one extra byte to make sure file not bigger than maxSize
-                    final byte[] readBuf = new byte[maxSize+1];
-                    final int bytesRead = inStream.read(readBuf, 0, maxSize+1);
-                    if (bytesRead <= 0) {
-                        Log.e(MmsService.TAG, "Reading PDU from sender: empty PDU");
-                        return null;
-                    }
-                    if (bytesRead > maxSize) {
-                        Log.e(MmsService.TAG, "Reading PDU from sender: PDU too large");
-                        return null;
-                    }
-                    // Copy and return the exact length of bytes
-                    final byte[] result = new byte[bytesRead];
-                    System.arraycopy(readBuf, 0, result, 0, bytesRead);
-                    return result;
-                } catch (IOException e) {
-                    Log.e(MmsService.TAG, "Reading PDU from sender: IO exception", e);
+        final Callable<byte[]> copyPduToArray = () -> {
+            ParcelFileDescriptor.AutoCloseInputStream inStream = null;
+            try {
+                final ContentResolver cr = context.getContentResolver();
+                final ParcelFileDescriptor pduFd = cr.openFileDescriptor(contentUri, "r");
+                inStream = new ParcelFileDescriptor.AutoCloseInputStream(pduFd);
+                // Request one extra byte to make sure file not bigger than maxSize
+                final byte[] readBuf = new byte[maxSize+1];
+                final int bytesRead = inStream.read(readBuf, 0, maxSize+1);
+                if (bytesRead <= 0) {
+                    Log.e(MmsService.TAG, "Reading PDU from sender: empty PDU");
                     return null;
-                } finally {
-                    if (inStream != null) {
-                        try {
-                            inStream.close();
-                        } catch (IOException ex) {
-                            // Ignore
-                        }
+                }
+                if (bytesRead > maxSize) {
+                    Log.e(MmsService.TAG, "Reading PDU from sender: PDU too large");
+                    return null;
+                }
+                // Copy and return the exact length of bytes
+                final byte[] result = new byte[bytesRead];
+                System.arraycopy(readBuf, 0, result, 0, bytesRead);
+                return result;
+            } catch (IOException e) {
+                Log.e(MmsService.TAG, "Reading PDU from sender: IO exception", e);
+                return null;
+            } finally {
+                if (inStream != null) {
+                    try {
+                        inStream.close();
+                    } catch (IOException ex) {
+                        // Ignore
                     }
                 }
             }
@@ -146,8 +145,7 @@ class SendRequest extends MmsRequest {
         return null;
     }
 
-    public static final Parcelable.Creator<SendRequest> CREATOR
-            = new Parcelable.Creator<SendRequest>() {
+    public static final Parcelable.Creator<SendRequest> CREATOR = new Parcelable.Creator<>() {
         public SendRequest createFromParcel(Parcel in) {
             return new SendRequest(in);
         }

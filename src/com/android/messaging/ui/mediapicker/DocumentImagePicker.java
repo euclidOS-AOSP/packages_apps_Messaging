@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +16,30 @@
  */
 package com.android.messaging.ui.mediapicker;
 
-import android.app.Fragment;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.fragment.app.Fragment;
 
 import com.android.messaging.Factory;
+import com.android.messaging.datamodel.MediaScratchFileProvider;
 import com.android.messaging.datamodel.data.PendingAttachmentData;
 import com.android.messaging.ui.UIIntents;
+import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.FileUtil;
 import com.android.messaging.util.ImageUtils;
-import com.android.messaging.util.SafeAsyncTask;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Wraps around the functionalities to allow the user to pick an image/video/audio from the document
@@ -56,6 +69,8 @@ public class DocumentImagePicker {
 
     private static final String EXTRA_PHOTO_URL = "photo_url";
 
+    private final ActivityResultLauncher<PickVisualMediaRequest> mPickMultipleMedia;
+
     /**
      * Creates a new instance of DocumentImagePicker.
      * @param activity The activity that owns the picker, or the activity that hosts the owning
@@ -65,39 +80,29 @@ public class DocumentImagePicker {
             final SelectionListener listener) {
         mFragment = fragment;
         mListener = listener;
+
+        mPickMultipleMedia = mFragment.registerForActivityResult(
+                new ActivityResultContracts.PickMultipleVisualMedia(
+                        BugleGservicesKeys.MMS_ATTACHMENT_LIMIT_DEFAULT), uris -> {
+                    // Callback is invoked after the user selects media items or closes the
+                    // photo picker.
+                    if (!uris.isEmpty()) {
+                        onDocumentsPicked(uris);
+                    }
+                });
     }
 
     /**
      * Intent out to open an image/video from document picker.
      */
     public void launchPicker() {
-        UIIntents.get().launchDocumentImagePicker(mFragment);
+        mPickMultipleMedia.launch(new PickVisualMediaRequest.Builder()
+                .setMediaType(ActivityResultContracts.PickVisualMedia.ImageAndVideo.INSTANCE)
+                .build());
     }
 
-    /**
-     * Must be called from the fragment/activity's onActivityResult().
-     */
-    public void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
-        // Sometimes called after media item has been picked from the document picker.
-        String url = data.getStringExtra(EXTRA_PHOTO_URL);
-        if (url == null) {
-            // we're using the builtin photo picker which supplies the return
-            // url as it's "data"
-            url = data.getDataString();
-            if (url == null) {
-                final Bundle extras = data.getExtras();
-                if (extras != null) {
-                    final Uri uri = (Uri) extras.getParcelable(Intent.EXTRA_STREAM);
-                    if (uri != null) {
-                        url = uri.toString();
-                    }
-                }
-            }
-        }
-
-        // Guard against null uri cases for when the activity returns a null/invalid intent.
-        if (url != null) {
-            final Uri uri = Uri.parse(url);
+    public void onDocumentsPicked(List<Uri> uris) {
+        for (Uri uri: uris) {
             prepareDocumentForAttachment(uri);
         }
     }
@@ -106,23 +111,24 @@ public class DocumentImagePicker {
         // Notify our listener with a PendingAttachmentData containing the metadata.
         // Asynchronously get the content type for the picked image since
         // ImageUtils.getContentType() potentially involves I/O and can be expensive.
-        new SafeAsyncTask<Void, Void, String>() {
-            @Override
-            protected String doInBackgroundTimed(final Void... params) {
-                if (FileUtil.isInPrivateDir(documentUri)) {
-                    // hacker sending private app data. Bail out
-                    if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.ERROR)) {
-                        LogUtil.e(LogUtil.BUGLE_TAG, "Aborting attach of private app data ("
-                                + documentUri + ")");
-                    }
-                    return null;
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Handler handler = new Handler(Looper.getMainLooper());
+        executor.execute(() -> {
+            final String contentType;
+            if (FileUtil.isInPrivateDir(documentUri) &&
+                    !MediaScratchFileProvider.isMediaScratchSpaceUri(documentUri)) {
+                // hacker sending private app data. Bail out
+                if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.ERROR)) {
+                    LogUtil.e(LogUtil.BUGLE_TAG, "Aborting attach of private app data ("
+                            + documentUri + ")");
                 }
-                return ImageUtils.getContentType(
+                contentType = null;
+            } else {
+                contentType = ImageUtils.getContentType(
                         Factory.get().getApplicationContext().getContentResolver(), documentUri);
             }
 
-            @Override
-            protected void onPostExecute(final String contentType) {
+            handler.post(() -> {
                 if (contentType == null) {
                     return;     // bad uri on input
                 }
@@ -131,7 +137,7 @@ public class DocumentImagePicker {
                         PendingAttachmentData.createPendingAttachmentData(contentType,
                                 documentUri);
                 mListener.onDocumentSelected(pendingItem);
-            }
-        }.executeOnThreadPool();
+            });
+        });
     }
 }

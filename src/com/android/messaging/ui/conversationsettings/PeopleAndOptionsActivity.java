@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +17,11 @@
 
 package com.android.messaging.ui.conversationsettings;
 
-import android.app.Fragment;
 import android.os.Bundle;
 import android.view.MenuItem;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
 
 import com.android.messaging.R;
 import com.android.messaging.ui.BugleActionBarActivity;
@@ -39,7 +42,7 @@ public class PeopleAndOptionsActivity extends BugleActionBarActivity {
     }
 
     @Override
-    public void onAttachFragment(final Fragment fragment) {
+    public void onAttachFragment(@NonNull final Fragment fragment) {
         if (fragment instanceof PeopleAndOptionsFragment) {
             final String conversationId =
                     getIntent().getStringExtra(UIIntents.UI_INTENT_EXTRA_CONVERSATION_ID);
@@ -51,16 +54,13 @@ public class PeopleAndOptionsActivity extends BugleActionBarActivity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(final MenuItem item) {
-        switch (item.getItemId()) {
-            case android.R.id.home:
-                // Treat the home press as back press so that when we go back to
-                // ConversationActivity, it doesn't lose its original intent (conversation id etc.)
-                onBackPressed();
-                return true;
-
-            default:
-                return super.onOptionsItemSelected(item);
+    public boolean onOptionsItemSelected(@NonNull final MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            // Treat the home press as back press so that when we go back to
+            // ConversationActivity, it doesn't lose its original intent (conversation id etc.)
+            onBackPressed();
+            return true;
         }
+        return super.onOptionsItemSelected(item);
     }
 }

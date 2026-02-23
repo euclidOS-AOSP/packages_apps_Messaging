@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +25,9 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.SystemClock;
 import android.provider.Telephony.Mms;
+import android.support.v7.mms.pdu.ContentType;
+
+import androidx.annotation.NonNull;
 import androidx.collection.LongSparseArray;
 
 import com.android.messaging.Factory;
@@ -40,11 +44,9 @@ import com.android.messaging.sms.DatabaseMessages.MmsMessage;
 import com.android.messaging.sms.DatabaseMessages.SmsMessage;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.BuglePrefs;
 import com.android.messaging.util.BuglePrefsKeys;
-import com.android.messaging.util.ContentType;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.OsUtil;
 
@@ -73,10 +75,8 @@ public class SyncMessagesAction extends Action implements Parcelable {
      * Start a full sync (backed off a few seconds to avoid pulling sending/receiving messages).
      */
     public static void fullSync() {
-        final BugleGservices bugleGservices = BugleGservices.get();
-        final long smsSyncBackoffTimeMillis = bugleGservices.getLong(
-                BugleGservicesKeys.SMS_SYNC_BACKOFF_TIME_MILLIS,
-                BugleGservicesKeys.SMS_SYNC_BACKOFF_TIME_MILLIS_DEFAULT);
+        final long smsSyncBackoffTimeMillis =
+                BugleGservicesKeys.SMS_SYNC_BACKOFF_TIME_MILLIS_DEFAULT;
 
         final long now = System.currentTimeMillis();
         // TODO: Could base this off most recent message in db but now should be okay...
@@ -91,10 +91,8 @@ public class SyncMessagesAction extends Action implements Parcelable {
      * Start an incremental sync to pull messages since last sync (backed off a few seconds)..
      */
     public static void sync() {
-        final BugleGservices bugleGservices = BugleGservices.get();
-        final long smsSyncBackoffTimeMillis = bugleGservices.getLong(
-                BugleGservicesKeys.SMS_SYNC_BACKOFF_TIME_MILLIS,
-                BugleGservicesKeys.SMS_SYNC_BACKOFF_TIME_MILLIS_DEFAULT);
+        final long smsSyncBackoffTimeMillis =
+                BugleGservicesKeys.SMS_SYNC_BACKOFF_TIME_MILLIS_DEFAULT;
 
         final long now = System.currentTimeMillis();
         // TODO: Could base this off most recent message in db but now should be okay...
@@ -108,11 +106,7 @@ public class SyncMessagesAction extends Action implements Parcelable {
      *  sending/receiving).
      */
     public static void immediateSync() {
-        final long now = System.currentTimeMillis();
-        // TODO: Could base this off most recent message in db but now should be okay...
-        final long startTimestamp = now;
-
-        sync(startTimestamp);
+        sync(System.currentTimeMillis());
     }
 
     private static void sync(final long startTimestamp) {
@@ -192,20 +186,16 @@ public class SyncMessagesAction extends Action implements Parcelable {
 
     @Override
     protected Bundle doBackgroundWork() {
-        final BugleGservices bugleGservices = BugleGservices.get();
         final DatabaseWrapper db = DataModel.get().getDatabase();
 
-        final int maxMessagesToScan = bugleGservices.getInt(
-                BugleGservicesKeys.SMS_SYNC_BATCH_MAX_MESSAGES_TO_SCAN,
-                BugleGservicesKeys.SMS_SYNC_BATCH_MAX_MESSAGES_TO_SCAN_DEFAULT);
+        final int maxMessagesToScan =
+                BugleGservicesKeys.SMS_SYNC_BATCH_MAX_MESSAGES_TO_SCAN_DEFAULT;
 
         final int initialMaxMessagesToUpdate = actionParameters.getInt(KEY_MAX_UPDATE);
-        final int smsSyncSubsequentBatchSizeMin = bugleGservices.getInt(
-                BugleGservicesKeys.SMS_SYNC_BATCH_SIZE_MIN,
-                BugleGservicesKeys.SMS_SYNC_BATCH_SIZE_MIN_DEFAULT);
-        final int smsSyncSubsequentBatchSizeMax = bugleGservices.getInt(
-                BugleGservicesKeys.SMS_SYNC_BATCH_SIZE_MAX,
-                BugleGservicesKeys.SMS_SYNC_BATCH_SIZE_MAX_DEFAULT);
+        final int smsSyncSubsequentBatchSizeMin =
+                BugleGservicesKeys.SMS_SYNC_BATCH_SIZE_MIN_DEFAULT;
+        final int smsSyncSubsequentBatchSizeMax =
+                BugleGservicesKeys.SMS_SYNC_BATCH_SIZE_MAX_DEFAULT;
 
         // Cap sync size to GServices limits
         final int maxMessagesToUpdate = Math.max(smsSyncSubsequentBatchSizeMin,
@@ -227,12 +217,11 @@ public class SyncMessagesAction extends Action implements Parcelable {
         cache.clear();
 
         // Sms messages to store
-        final ArrayList<SmsMessage> smsToAdd = new ArrayList<SmsMessage>();
+        final ArrayList<SmsMessage> smsToAdd = new ArrayList<>();
         // Mms messages to store
-        final LongSparseArray<MmsMessage> mmsToAdd = new LongSparseArray<MmsMessage>();
+        final LongSparseArray<MmsMessage> mmsToAdd = new LongSparseArray<>();
         // List of local SMS/MMS to remove
-        final ArrayList<LocalDatabaseMessage> messagesToDelete =
-                new ArrayList<LocalDatabaseMessage>();
+        final ArrayList<LocalDatabaseMessage> messagesToDelete = new ArrayList<>();
 
         long lastTimestampMillis = SYNC_FAILED;
         if (syncManager.isSyncing(upperBoundTimeMillis)) {
@@ -248,7 +237,7 @@ public class SyncMessagesAction extends Action implements Parcelable {
 
         // If comparison succeeds bundle up the changes for processing in ActionService
         if (lastTimestampMillis > SYNC_FAILED) {
-            final ArrayList<MmsMessage> mmsToAddList = new ArrayList<MmsMessage>();
+            final ArrayList<MmsMessage> mmsToAddList = new ArrayList<>();
             for (int i = 0; i < mmsToAdd.size(); i++) {
                 final MmsMessage mms = mmsToAdd.valueAt(i);
                 mmsToAddList.add(mms);
@@ -283,10 +272,10 @@ public class SyncMessagesAction extends Action implements Parcelable {
         final long startTimeMillis = SystemClock.elapsedRealtime();
 
         // Number of messages scanned local and remote
-        int localPos = 0;
-        int remotePos = 0;
-        int localTotal = 0;
-        int remoteTotal = 0;
+        int localPos;
+        int remotePos;
+        int localTotal;
+        int remoteTotal;
         // Scan through the messages on both sides and prepare messages for local message table
         // changes (including adding and deleting)
         try {
@@ -394,11 +383,12 @@ public class SyncMessagesAction extends Action implements Parcelable {
             } else {
                 // Succeeded
                 final ArrayList<SmsMessage> smsToAdd =
-                        response.getParcelableArrayList(BUNDLE_KEY_SMS_MESSAGES);
+                        response.getParcelableArrayList(BUNDLE_KEY_SMS_MESSAGES, SmsMessage.class);
                 final ArrayList<MmsMessage> mmsToAdd =
-                        response.getParcelableArrayList(BUNDLE_KEY_MMS_MESSAGES);
+                        response.getParcelableArrayList(BUNDLE_KEY_MMS_MESSAGES, MmsMessage.class);
                 final ArrayList<LocalDatabaseMessage> messagesToDelete =
-                        response.getParcelableArrayList(BUNDLE_KEY_MESSAGES_TO_DELETE);
+                        response.getParcelableArrayList(BUNDLE_KEY_MESSAGES_TO_DELETE,
+                                LocalDatabaseMessage.class);
 
                 final int messagesUpdated = smsToAdd.size() + mmsToAdd.size()
                         + messagesToDelete.size();
@@ -509,10 +499,8 @@ public class SyncMessagesAction extends Action implements Parcelable {
      * @return Target number of messages to sync for next batch
      */
     private static int nextBatchSize(final int messagesUpdated, final long txnTimeMillis) {
-        final BugleGservices bugleGservices = BugleGservices.get();
-        final long smsSyncSubsequentBatchTimeLimitMillis = bugleGservices.getLong(
-                BugleGservicesKeys.SMS_SYNC_BATCH_TIME_LIMIT_MILLIS,
-                BugleGservicesKeys.SMS_SYNC_BATCH_TIME_LIMIT_MILLIS_DEFAULT);
+        final long smsSyncSubsequentBatchTimeLimitMillis =
+                BugleGservicesKeys.SMS_SYNC_BATCH_TIME_LIMIT_MILLIS_DEFAULT;
 
         if (txnTimeMillis <= 0) {
             return 0;
@@ -618,7 +606,7 @@ public class SyncMessagesAction extends Action implements Parcelable {
     }
 
     public static final Parcelable.Creator<SyncMessagesAction> CREATOR
-            = new Parcelable.Creator<SyncMessagesAction>() {
+            = new Parcelable.Creator<>() {
         @Override
         public SyncMessagesAction createFromParcel(final Parcel in) {
             return new SyncMessagesAction(in);
@@ -631,7 +619,7 @@ public class SyncMessagesAction extends Action implements Parcelable {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

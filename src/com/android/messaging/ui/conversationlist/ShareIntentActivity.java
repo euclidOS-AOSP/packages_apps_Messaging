@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +17,19 @@
 
 package com.android.messaging.ui.conversationlist;
 
-import android.app.Fragment;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.v7.mms.pdu.ContentType;
 import android.text.TextUtils;
 
+import androidx.annotation.NonNull;
 import androidx.collection.ArrayMap;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentOnAttachListener;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.data.ConversationListItemData;
@@ -33,22 +38,21 @@ import com.android.messaging.datamodel.data.PendingAttachmentData;
 import com.android.messaging.ui.BaseBugleActivity;
 import com.android.messaging.ui.UIIntents;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.ContentType;
+import com.android.messaging.util.FileUtil;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.MediaMetadataRetrieverWrapper;
-import com.android.messaging.util.FileUtil;
 import com.android.messaging.util.UriUtil;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
 
 public class ShareIntentActivity extends BaseBugleActivity implements
-        ShareIntentFragment.HostInterface {
+        ShareIntentFragment.HostInterface, FragmentOnAttachListener {
 
     private MessageData mDraftMessage;
 
@@ -74,11 +78,13 @@ public class ShareIntentActivity extends BaseBugleActivity implements
             finish();
             return;
         }
-        new ShareIntentFragment().show(getFragmentManager(), "ShareIntentFragment");
+        getSupportFragmentManager().addFragmentOnAttachListener(this);
+        new ShareIntentFragment().show(getSupportFragmentManager(), "ShareIntentFragment");
     }
 
     @Override
-    public void onAttachFragment(final Fragment fragment) {
+    public void onAttachFragment(@NonNull FragmentManager fragmentManager,
+                                 @NonNull Fragment fragment) {
         final Intent intent = getIntent();
         final String action = intent.getAction();
 
@@ -88,7 +94,7 @@ public class ShareIntentActivity extends BaseBugleActivity implements
         }
 
         if (Intent.ACTION_SEND.equals(action)) {
-            final Uri contentUri = (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            final Uri contentUri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
             if (UriUtil.isFileUri(contentUri)) {
                 LogUtil.i(
                     LogUtil.BUGLE_TAG,
@@ -128,9 +134,10 @@ public class ShareIntentActivity extends BaseBugleActivity implements
         } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
             final String contentType = intent.getType();
             // Handle sharing multiple contents.
-            final ArrayList<Uri> uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            final ArrayList<Uri> uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM,
+                    Uri.class);
             if (uris != null && !uris.isEmpty()) {
-                ArrayMap<Uri, String> uriMap = new ArrayMap<Uri, String>();
+                ArrayMap<Uri, String> uriMap = new ArrayMap<>();
                 StringBuffer strBuffer = new StringBuffer();
                 for (final Uri uri : uris) {
                     if (UriUtil.isFileUri(uri)) {

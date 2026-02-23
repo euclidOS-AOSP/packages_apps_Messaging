@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +25,6 @@ import com.android.messaging.util.Assert;
 import com.android.messaging.util.ContactUtil;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 
 /**
  * A cursor builder that takes the frequent contacts cursor and aggregate it with the all contacts
@@ -45,20 +44,16 @@ public class FrequentContactsCursorBuilder {
 
     /**
      * Sets the frequent contacts cursor as soon as it is loaded, or null if it's reset.
-     * @return this builder instance for chained operations
      */
-    public FrequentContactsCursorBuilder setFrequents(final Cursor frequentContactsCursor) {
+    public void setFrequents(final Cursor frequentContactsCursor) {
         mFrequentContactsCursor = frequentContactsCursor;
-        return this;
     }
 
     /**
      * Sets the all contacts cursor as soon as it is loaded, or null if it's reset.
-     * @return this builder instance for chained operations
      */
-    public FrequentContactsCursorBuilder setAllContacts(final Cursor allContactsCursor) {
+    public void setAllContacts(final Cursor allContactsCursor) {
         mAllContactsCursor = allContactsCursor;
-        return this;
     }
 
     /**
@@ -74,7 +69,7 @@ public class FrequentContactsCursorBuilder {
      * are both ready to be consumed.
      * @return the frequent contact cursor if built successfully, or null if it can't be built yet.
      */
-    public Cursor build() {
+    public Cursor build(boolean getAllContacts) {
         if (mFrequentContactsCursor != null && mAllContactsCursor != null) {
             Assert.isTrue(!mFrequentContactsCursor.isClosed());
             Assert.isTrue(!mAllContactsCursor.isClosed());
@@ -86,8 +81,7 @@ public class FrequentContactsCursorBuilder {
 
             // First, go through the frequents cursor and take note of all lookup keys and their
             // corresponding rank in the frequents list.
-            final SimpleArrayMap<String, Integer> lookupKeyToRankMap =
-                    new SimpleArrayMap<String, Integer>();
+            final SimpleArrayMap<String, Integer> lookupKeyToRankMap = new SimpleArrayMap<>();
             int oldPosition = mFrequentContactsCursor.getPosition();
             int rank = 0;
             mFrequentContactsCursor.moveToPosition(-1);
@@ -102,13 +96,12 @@ public class FrequentContactsCursorBuilder {
             // (multiple phone numbers etc.) and store that in an array list. Since the all
             // contacts list only contains phone contacts, this step will ensure that we filter
             // out any invalid/email contacts in the frequents list.
-            final ArrayList<Object[]> rows =
-                    new ArrayList<Object[]>(mFrequentContactsCursor.getCount());
+            final ArrayList<Object[]> rows = new ArrayList<>(mFrequentContactsCursor.getCount());
             oldPosition = mAllContactsCursor.getPosition();
             mAllContactsCursor.moveToPosition(-1);
             while (mAllContactsCursor.moveToNext()) {
                 final String lookupKey = mAllContactsCursor.getString(ContactUtil.INDEX_LOOKUP_KEY);
-                if (lookupKeyToRankMap.containsKey(lookupKey)) {
+                if (lookupKeyToRankMap.containsKey(lookupKey) || getAllContacts) {
                     final Object[] row = new Object[ContactUtil.PhoneQuery.PROJECTION.length];
                     row[ContactUtil.INDEX_DATA_ID] =
                             mAllContactsCursor.getLong(ContactUtil.INDEX_DATA_ID);
@@ -121,49 +114,67 @@ public class FrequentContactsCursorBuilder {
                     row[ContactUtil.INDEX_PHOTO_URI] =
                             mAllContactsCursor.getString(ContactUtil.INDEX_PHOTO_URI);
                     row[ContactUtil.INDEX_PHONE_EMAIL] =
-                            mAllContactsCursor.getString(ContactUtil.INDEX_PHONE_EMAIL);
+                            mAllContactsCursor.getString(ContactUtil.INDEX_PHONE_EMAIL)
+                                    .replaceAll("[^\\d+]", "");
                     row[ContactUtil.INDEX_PHONE_EMAIL_TYPE] =
                             mAllContactsCursor.getInt(ContactUtil.INDEX_PHONE_EMAIL_TYPE);
                     row[ContactUtil.INDEX_PHONE_EMAIL_LABEL] =
                             mAllContactsCursor.getString(ContactUtil.INDEX_PHONE_EMAIL_LABEL);
-                    rows.add(row);
+
+                    boolean numberAlreadyAdded = false;
+                    for (Object[] oldRow : rows) {
+                        final int idxType = ContactUtil.INDEX_PHONE_EMAIL_TYPE;
+                        final int idxPhone = ContactUtil.INDEX_PHONE_EMAIL;
+                        if (oldRow[idxType] == row[idxType] &&
+                                oldRow[idxPhone].toString().equals(row[idxPhone].toString())) {
+                            numberAlreadyAdded = true;
+                            break;
+                        }
+                    }
+                    if (!numberAlreadyAdded) {
+                        rows.add(row);
+                    }
                 }
             }
             mAllContactsCursor.moveToPosition(oldPosition);
 
+            // We can return all rows at this point, no sorting or further filtering needed
+            if (getAllContacts) {
+                for (final Object[] row : rows) {
+                    retCursor.addRow(row);
+                }
+                return retCursor;
+            }
+
             // Now we have a list of rows containing frequent contacts in alphabetical order.
             // Therefore, sort all the rows according to their actual ranks in the frequents list.
-            Collections.sort(rows, new Comparator<Object[]>() {
-                @Override
-                public int compare(final Object[] lhs, final Object[] rhs) {
-                    final String lookupKeyLhs = (String) lhs[ContactUtil.INDEX_LOOKUP_KEY];
-                    final String lookupKeyRhs = (String) rhs[ContactUtil.INDEX_LOOKUP_KEY];
-                    Assert.isTrue(lookupKeyToRankMap.containsKey(lookupKeyLhs) &&
-                            lookupKeyToRankMap.containsKey(lookupKeyRhs));
-                    final int rankLhs = lookupKeyToRankMap.get(lookupKeyLhs);
-                    final int rankRhs = lookupKeyToRankMap.get(lookupKeyRhs);
-                    if (rankLhs < rankRhs) {
+            rows.sort((lhs, rhs) -> {
+                final String lookupKeyLhs = (String) lhs[ContactUtil.INDEX_LOOKUP_KEY];
+                final String lookupKeyRhs = (String) rhs[ContactUtil.INDEX_LOOKUP_KEY];
+                Assert.isTrue(lookupKeyToRankMap.containsKey(lookupKeyLhs) &&
+                        lookupKeyToRankMap.containsKey(lookupKeyRhs));
+                final int rankLhs = lookupKeyToRankMap.get(lookupKeyLhs);
+                final int rankRhs = lookupKeyToRankMap.get(lookupKeyRhs);
+                if (rankLhs < rankRhs) {
+                    return -1;
+                } else if (rankLhs > rankRhs) {
+                    return 1;
+                } else {
+                    // Same rank, so it's two contact records for the same contact.
+                    // Perform secondary sorting on the phone type. Always place
+                    // mobile before everything else.
+                    final int phoneTypeLhs = (int) lhs[ContactUtil.INDEX_PHONE_EMAIL_TYPE];
+                    final int phoneTypeRhs = (int) rhs[ContactUtil.INDEX_PHONE_EMAIL_TYPE];
+                    if (phoneTypeLhs == Phone.TYPE_MOBILE &&
+                            phoneTypeRhs == Phone.TYPE_MOBILE) {
+                        return 0;
+                    } else if (phoneTypeLhs == Phone.TYPE_MOBILE) {
                         return -1;
-                    } else if (rankLhs > rankRhs) {
+                    } else if (phoneTypeRhs == Phone.TYPE_MOBILE) {
                         return 1;
                     } else {
-                        // Same rank, so it's two contact records for the same contact.
-                        // Perform secondary sorting on the phone type. Always place
-                        // mobile before everything else.
-                        final int phoneTypeLhs = (int) lhs[ContactUtil.INDEX_PHONE_EMAIL_TYPE];
-                        final int phoneTypeRhs = (int) rhs[ContactUtil.INDEX_PHONE_EMAIL_TYPE];
-                        if (phoneTypeLhs == Phone.TYPE_MOBILE &&
-                                phoneTypeRhs == Phone.TYPE_MOBILE) {
-                            return 0;
-                        } else if (phoneTypeLhs == Phone.TYPE_MOBILE) {
-                            return -1;
-                        } else if (phoneTypeRhs == Phone.TYPE_MOBILE) {
-                            return 1;
-                        } else {
-                            // Use the default sort order, i.e. sort by phoneType value.
-                            return phoneTypeLhs < phoneTypeRhs ? -1 :
-                                    (phoneTypeLhs == phoneTypeRhs ? 0 : 1);
-                        }
+                        // Use the default sort order, i.e. sort by phoneType value.
+                        return Integer.compare(phoneTypeLhs, phoneTypeRhs);
                     }
                 }
             });

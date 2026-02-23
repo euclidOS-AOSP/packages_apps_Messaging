@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +19,15 @@ package com.android.messaging.ui;
 
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
-import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.app.AppCompatActivity;
 import android.view.ActionMode;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.android.messaging.R;
 import com.android.messaging.util.BugleActivityUtil;
@@ -66,50 +69,41 @@ public class BugleActionBarActivity extends AppCompatActivity implements ImeUtil
         }
 
         mLastScreenHeight = getResources().getDisplayMetrics().heightPixels;
-        if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onCreate");
-        }
+        LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onCreate");
+
+        getWindow().setStatusBarColor(getResources().getColor(R.color.action_bar_background_color,
+                getTheme()));
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onStart");
-        }
+        LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onStart");
     }
 
     @Override
     protected void onRestart() {
-        super.onStop();
-        if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onRestart");
-        }
+        super.onRestart();
+        LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onRestart");
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onResume");
-        }
+        LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onResume");
         BugleActivityUtil.onActivityResume(this, BugleActionBarActivity.this);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onPause");
-        }
+        LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onPause");
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onStop");
-        }
+        LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onStop");
     }
 
     private boolean mDestroyed;
@@ -145,11 +139,9 @@ public class BugleActionBarActivity extends AppCompatActivity implements ImeUtil
         final boolean imeWasOpen = mImeOpen;
         mImeOpen = screenHeight - height > 100;
 
-        if (LogUtil.isLoggable(LogUtil.BUGLE_TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onDisplayHeightChanged " +
-                    "imeWasOpen: " + imeWasOpen + " mImeOpen: " + mImeOpen + " screenHeight: " +
-                    screenHeight + " height: " + height);
-        }
+        LogUtil.v(LogUtil.BUGLE_TAG, this.getLocalClassName() + ".onDisplayHeightChanged " +
+                "imeWasOpen: " + imeWasOpen + " mImeOpen: " + mImeOpen + " screenHeight: " +
+                screenHeight + " height: " + height);
 
         if (imeWasOpen != mImeOpen) {
             for (final ImeUtil.ImeStateObserver observer : mImeStateObservers) {
@@ -194,18 +186,17 @@ public class BugleActionBarActivity extends AppCompatActivity implements ImeUtil
     }
 
     @Override
-    public boolean onOptionsItemSelected(final MenuItem menuItem) {
+    public boolean onOptionsItemSelected(@NonNull final MenuItem menuItem) {
         if (mActionMode != null &&
                 mActionMode.getCallback().onActionItemClicked(mActionMode, menuItem)) {
             return true;
         }
 
-        switch (menuItem.getItemId()) {
-            case android.R.id.home:
-                if (mActionMode != null) {
-                    dismissActionMode();
-                    return true;
-                }
+        if (menuItem.getItemId() == android.R.id.home) {
+            if (mActionMode != null) {
+                dismissActionMode();
+                return true;
+            }
         }
         return super.onOptionsItemSelected(menuItem);
     }
@@ -349,7 +340,7 @@ public class BugleActionBarActivity extends AppCompatActivity implements ImeUtil
             mActionMode.getCallback().onPrepareActionMode(mActionMode, mActionBarMenu);
             actionBar.setBackgroundDrawable(new ColorDrawable(
                     getResources().getColor(R.color.contextual_action_bar_background_color)));
-            actionBar.setHomeAsUpIndicator(R.drawable.ic_cancel_small_dark);
+            actionBar.setHomeAsUpIndicator(R.drawable.ic_cancel_small_light);
             actionBar.show();
         }
     }

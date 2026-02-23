@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2015 The Android Open Source Project        
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +26,6 @@ import com.android.messaging.datamodel.data.SubscriptionListData;
 import com.android.messaging.datamodel.data.SubscriptionListData.SubscriptionListEntry;
 import com.android.messaging.ui.conversation.SimSelectorView.SimSelectorViewListener;
 import com.android.messaging.util.AccessibilityUtil;
-import com.android.messaging.util.Assert;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.ThreadUtil;
 
 /**
@@ -47,16 +46,12 @@ abstract class ConversationSimSelector extends ConversationInput {
         mSimSelectorView.bind(subscriptionListData);
         mDataReady = subscriptionListData != null && subscriptionListData.hasData();
         if (mPendingShow != null && mDataReady) {
-            Assert.isTrue(OsUtil.isAtLeastL_MR1());
             final boolean show = mPendingShow.first;
             final boolean animate = mPendingShow.second;
-            ThreadUtil.getMainThreadHandler().post(new Runnable() {
-                @Override
-                public void run() {
-                    // This will No-Op if we are no longer attached to the host.
-                    mConversationInputBase.showHideInternal(ConversationSimSelector.this,
-                            show, animate);
-                }
+            ThreadUtil.getMainThreadHandler().post(() -> {
+                // This will No-Op if we are no longer attached to the host.
+                mConversationInputBase.showHideInternal(ConversationSimSelector.this,
+                        show, animate);
             });
             mPendingShow = null;
         }
@@ -88,10 +83,6 @@ abstract class ConversationSimSelector extends ConversationInput {
     }
 
     private boolean showHide(final boolean show, final boolean animate) {
-        if (!OsUtil.isAtLeastL_MR1()) {
-            return false;
-        }
-
         if (mDataReady) {
             mSimSelectorView.showOrHide(show, animate);
             return mSimSelectorView.isOpen() == show;

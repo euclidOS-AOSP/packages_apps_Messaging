@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +35,6 @@ import com.android.messaging.ui.UIIntents;
 import com.android.messaging.ui.UIIntentsImpl;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.BugleApplicationPrefs;
-import com.android.messaging.util.BugleGservices;
-import com.android.messaging.util.BugleGservicesImpl;
 import com.android.messaging.util.BuglePrefs;
 import com.android.messaging.util.BugleSubscriptionPrefs;
 import com.android.messaging.util.BugleWidgetPrefs;
@@ -50,7 +49,6 @@ import java.util.concurrent.ConcurrentHashMap;
 class FactoryImpl extends Factory {
     private BugleApplication mApplication;
     private DataModel mDataModel;
-    private BugleGservices mBugleGservices;
     private BugleApplicationPrefs mBugleApplicationPrefs;
     private BugleWidgetPrefs mBugleWidgetPrefs;
     private Context mApplicationContext;
@@ -59,14 +57,10 @@ class FactoryImpl extends Factory {
     private MediaResourceManager mMediaResourceManager;
     private MediaCacheManager mMediaCacheManager;
     private ContactContentObserver mContactContentObserver;
-    private PhoneUtils mPhoneUtils;
     private MediaUtil mMediaUtil;
     private SparseArray<BugleSubscriptionPrefs> mSubscriptionPrefs;
     private BugleCarrierConfigValuesLoader mCarrierConfigValuesLoader;
 
-    // Cached instance for Pre-L_MR1
-    private static final Object PHONEUTILS_INSTANCE_LOCK = new Object();
-    private static PhoneUtils sPhoneUtilsInstancePreLMR1 = null;
     // Cached subId->instance for L_MR1 and beyond
     private static final ConcurrentHashMap<Integer, PhoneUtils> sPhoneUtilsInstanceCacheLMR1 =
             new ConcurrentHashMap<>();
@@ -91,18 +85,14 @@ class FactoryImpl extends Factory {
         factory.mMemoryCacheManager = new MemoryCacheManager();
         factory.mMediaCacheManager = new BugleMediaCacheManager();
         factory.mMediaResourceManager = new MediaResourceManager();
-        factory.mBugleGservices = new BugleGservicesImpl(applicationContext);
         factory.mBugleApplicationPrefs = new BugleApplicationPrefs(applicationContext);
         factory.mDataModel = new DataModelImpl(applicationContext);
         factory.mBugleWidgetPrefs = new BugleWidgetPrefs(applicationContext);
         factory.mUIIntents = new UIIntentsImpl();
         factory.mContactContentObserver = new ContactContentObserver();
         factory.mMediaUtil = new MediaUtilImpl();
-        factory.mSubscriptionPrefs = new SparseArray<BugleSubscriptionPrefs>();
+        factory.mSubscriptionPrefs = new SparseArray<>();
         factory.mCarrierConfigValuesLoader = new BugleCarrierConfigValuesLoader(applicationContext);
-
-        Assert.initializeGservices(factory.mBugleGservices);
-        LogUtil.initializeGservices(factory.mBugleGservices);
 
         if (OsUtil.hasRequiredPermissions()) {
             factory.onRequiredPermissionsAcquired();
@@ -120,13 +110,10 @@ class FactoryImpl extends Factory {
 
         mApplication.initializeSync(this);
 
-        final Thread asyncInitialization = new Thread() {
-            @Override
-            public void run() {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
-                mApplication.initializeAsync(FactoryImpl.this);
-            }
-        };
+        final Thread asyncInitialization = new Thread(() -> {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+            mApplication.initializeAsync(FactoryImpl.this);
+        });
         asyncInitialization.start();
     }
 
@@ -138,11 +125,6 @@ class FactoryImpl extends Factory {
     @Override
     public DataModel getDataModel() {
         return mDataModel;
-    }
-
-    @Override
-    public BugleGservices getBugleGservices() {
-        return mBugleGservices;
     }
 
     @Override
@@ -197,40 +179,24 @@ class FactoryImpl extends Factory {
 
     @Override
     public PhoneUtils getPhoneUtils(int subId) {
-        if (OsUtil.isAtLeastL_MR1()) {
-            if (subId == ParticipantData.DEFAULT_SELF_SUB_ID) {
-                subId = SmsManager.getDefaultSmsSubscriptionId();
-            }
-            if (subId < 0) {
-                LogUtil.w(LogUtil.BUGLE_TAG, "PhoneUtils.getForLMR1(): invalid subId = " + subId);
-                subId = ParticipantData.DEFAULT_SELF_SUB_ID;
-            }
-            PhoneUtils instance = sPhoneUtilsInstanceCacheLMR1.get(subId);
-            if (instance == null) {
-                instance = new PhoneUtils.PhoneUtilsLMR1(subId);
-                sPhoneUtilsInstanceCacheLMR1.putIfAbsent(subId, instance);
-            }
-            return instance;
-        } else {
-            Assert.isTrue(subId == ParticipantData.DEFAULT_SELF_SUB_ID);
-            if (sPhoneUtilsInstancePreLMR1 == null) {
-                synchronized (PHONEUTILS_INSTANCE_LOCK) {
-                    if (sPhoneUtilsInstancePreLMR1 == null) {
-                        sPhoneUtilsInstancePreLMR1 = new PhoneUtils.PhoneUtilsPreLMR1();
-                    }
-                }
-            }
-            return sPhoneUtilsInstancePreLMR1;
+        if (subId == ParticipantData.DEFAULT_SELF_SUB_ID) {
+            subId = SmsManager.getDefaultSmsSubscriptionId();
         }
+        if (subId < 0) {
+            LogUtil.w(LogUtil.BUGLE_TAG, "PhoneUtils.getForLMR1(): invalid subId = " + subId);
+            subId = ParticipantData.DEFAULT_SELF_SUB_ID;
+        }
+        PhoneUtils instance = sPhoneUtilsInstanceCacheLMR1.get(subId);
+        if (instance == null) {
+            instance = new PhoneUtils(subId);
+            sPhoneUtilsInstanceCacheLMR1.putIfAbsent(subId, instance);
+        }
+        return instance;
     }
 
     @Override
     public void reclaimMemory() {
         mMemoryCacheManager.reclaimMemory();
-    }
-
-    @Override
-    public void onActivityResume() {
     }
 
     @Override

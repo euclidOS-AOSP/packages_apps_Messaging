@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +21,11 @@ import android.content.res.Resources;
 import android.graphics.Rect;
 import android.net.Uri;
 import androidx.annotation.Nullable;
+
+import android.support.v7.mms.pdu.ContentType;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.View.OnClickListener;
-import android.view.View.OnLongClickListener;
 import android.view.ViewGroup;
 import android.widget.FrameLayout.LayoutParams;
 import android.widget.ImageView;
@@ -43,7 +44,6 @@ import com.android.messaging.datamodel.media.UriImageRequestDescriptor;
 import com.android.messaging.ui.MultiAttachmentLayout.OnAttachmentClickListener;
 import com.android.messaging.ui.PersonItemView.PersonItemViewListener;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.ContentType;
 import com.android.messaging.util.ImageUtils;
 import com.android.messaging.util.UiUtils;
 import com.android.messaging.util.UriUtil;
@@ -66,7 +66,7 @@ public class AttachmentPreviewFactory {
             final int viewType, final boolean startImageRequest,
             @Nullable final OnAttachmentClickListener clickListener) {
         final String contentType = attachmentData.getContentType();
-        View attachmentView = null;
+        View attachmentView;
         if (attachmentData instanceof PendingAttachmentData) {
             attachmentView = createPendingAttachmentPreview(layoutInflater, parent,
                     (PendingAttachmentData) attachmentData);
@@ -85,7 +85,7 @@ public class AttachmentPreviewFactory {
         }
 
         // Some views have a caption, set the text/visibility if one exists
-        final TextView captionView = (TextView) attachmentView.findViewById(R.id.caption);
+        final TextView captionView = attachmentView.findViewById(R.id.caption);
         if (captionView != null) {
             final String caption = attachmentData.getText();
             captionView.setVisibility(TextUtils.isEmpty(caption) ? View.GONE : View.VISIBLE);
@@ -93,22 +93,16 @@ public class AttachmentPreviewFactory {
         }
 
         if (attachmentView != null && clickListener != null) {
-            attachmentView.setOnClickListener(new OnClickListener() {
-                    @Override
-                    public void onClick(final View view) {
-                        final Rect bounds = UiUtils.getMeasuredBoundsOnScreen(view);
-                        clickListener.onAttachmentClick(attachmentData, bounds,
-                                false /* longPress */);
-                    }
-                });
-            attachmentView.setOnLongClickListener(new OnLongClickListener() {
-                    @Override
-                    public boolean onLongClick(final View view) {
-                        final Rect bounds = UiUtils.getMeasuredBoundsOnScreen(view);
-                        return clickListener.onAttachmentClick(attachmentData, bounds,
-                                true /* longPress */);
-                    }
-                });
+            attachmentView.setOnClickListener(view -> {
+                final Rect bounds = UiUtils.getMeasuredBoundsOnScreen(view);
+                clickListener.onAttachmentClick(attachmentData, bounds,
+                        false /* longPress */);
+            });
+            attachmentView.setOnLongClickListener(view -> {
+                final Rect bounds = UiUtils.getMeasuredBoundsOnScreen(view);
+                return clickListener.onAttachmentClick(attachmentData, bounds,
+                        true /* longPress */);
+            });
         }
         return attachmentView;
     }
@@ -165,8 +159,7 @@ public class AttachmentPreviewFactory {
                 break;
         }
         final View view = layoutInflater.inflate(layoutId, parent, false /* attachToRoot */);
-        final AsyncImageView imageView = (AsyncImageView) view.findViewById(
-                R.id.attachment_image_view);
+        final AsyncImageView imageView = view.findViewById(R.id.attachment_image_view);
         int maxWidth = imageView.getMaxWidth();
         int maxHeight = imageView.getMaxHeight();
         if (viewType == TYPE_CHOOSER_GRID) {
@@ -193,8 +186,7 @@ public class AttachmentPreviewFactory {
             final ViewGroup parent, final PendingAttachmentData attachmentData) {
         final View pendingItemView = layoutInflater.inflate(R.layout.attachment_pending_item,
                 parent, false);
-        final ImageView imageView = (ImageView)
-                pendingItemView.findViewById(R.id.pending_item_view);
+        final ImageView imageView = pendingItemView.findViewById(R.id.pending_item_view);
         final ViewGroup.LayoutParams layoutParams = imageView.getLayoutParams();
         final int defaultSize = layoutInflater.getContext().getResources().getDimensionPixelSize(
                 R.dimen.pending_attachment_size);
@@ -224,8 +216,7 @@ public class AttachmentPreviewFactory {
                 break;
         }
         final View view = layoutInflater.inflate(layoutId, parent, false /* attachToRoot */);
-        final PersonItemView vcardPreview = (PersonItemView) view.findViewById(
-                R.id.vcard_attachment_view);
+        final PersonItemView vcardPreview = view.findViewById(R.id.vcard_attachment_view);
         vcardPreview.setAvatarOnly(viewType != AttachmentPreviewFactory.TYPE_SINGLE);
         vcardPreview.bind(DataModel.get().createVCardContactItemData(layoutInflater.getContext(),
                 attachmentData));
@@ -267,8 +258,7 @@ public class AttachmentPreviewFactory {
                 break;
         }
         final View view = layoutInflater.inflate(layoutId, parent, false /* attachToRoot */);
-        final AudioAttachmentView audioView = (AudioAttachmentView)
-                view.findViewById(R.id.audio_attachment_view);
+        final AudioAttachmentView audioView = view.findViewById(R.id.audio_attachment_view);
         audioView.bindMessagePartData(
                 attachmentData, false /* incoming */, false /* showAsSelected */);
         return view;

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +119,7 @@ public class PoolableImageCache extends MediaCache<ImageResource> {
         private final SparseArray<LinkedList<ImageResource>> mImageListSparseArray;
 
         public ReusableImageResourcePool() {
-            mImageListSparseArray = new SparseArray<LinkedList<ImageResource>>();
+            mImageListSparseArray = new SparseArray<>();
         }
 
         /**
@@ -130,7 +131,6 @@ public class PoolableImageCache extends MediaCache<ImageResource> {
          * @param width The width of the bitmap.
          * @param height The height of the bitmap.
          * @return The decoded Bitmap with the resource drawn in it.
-         * @throws IOException
          */
         public Bitmap decodeSampledBitmapFromInputStream(@NonNull final InputStream inputStream,
                 @NonNull final BitmapFactory.Options optionsTmp,
@@ -171,7 +171,6 @@ public class PoolableImageCache extends MediaCache<ImageResource> {
          * @param width The width of the bitmap.
          * @param height The height of the bitmap.
          * @return A Bitmap with the encoded bytes drawn in it.
-         * @throws IOException
          */
         public Bitmap decodeByteArray(@NonNull final byte[] bytes,
                 @NonNull final BitmapFactory.Options optionsTmp, final int width,
@@ -232,7 +231,7 @@ public class PoolableImageCache extends MediaCache<ImageResource> {
                 Assert.isTrue(poolKey != INVALID_POOL_KEY);
                 LinkedList<ImageResource> imageList = mImageListSparseArray.get(poolKey);
                 if (imageList == null) {
-                    imageList = new LinkedList<ImageResource>();
+                    imageList = new LinkedList<>();
                     mImageListSparseArray.put(poolKey, imageList);
                 }
                 imageList.addLast(imageResource);
@@ -298,12 +297,10 @@ public class PoolableImageCache extends MediaCache<ImageResource> {
                             final long timeSinceLastRef = SystemClock.elapsedRealtime() -
                                     imageToUse.getLastRefAddTimestamp();
                             if (timeSinceLastRef < MIN_TIME_IN_POOL) {
-                                if (LogUtil.isLoggable(LogUtil.BUGLE_IMAGE_TAG, LogUtil.VERBOSE)) {
-                                    LogUtil.v(LogUtil.BUGLE_IMAGE_TAG, "Not reusing reusing " +
-                                            "first available bitmap from the pool because it " +
-                                            "has not been in the pool long enough. " +
-                                            "timeSinceLastRef=" + timeSinceLastRef);
-                                }
+                                LogUtil.v(LogUtil.BUGLE_IMAGE_TAG, "Not reusing reusing " +
+                                        "first available bitmap from the pool because it " +
+                                        "has not been in the pool long enough. " +
+                                        "timeSinceLastRef=" + timeSinceLastRef);
                                 // Put back the image and return no reuseable bitmap.
                                 images.addLast(imageToUse);
                                 return null;

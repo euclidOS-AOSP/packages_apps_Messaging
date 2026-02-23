@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +26,9 @@ import android.view.View;
 import android.widget.LinearLayout;
 
 import com.android.messaging.R;
-import com.android.messaging.util.OsUtil;
 
 public class ViewPagerTabStrip extends LinearLayout {
-    private int mSelectedUnderlineThickness;
+    private final int mSelectedUnderlineThickness;
     private final Paint mSelectedUnderlinePaint;
 
     private int mIndexForSelection;
@@ -42,11 +42,12 @@ public class ViewPagerTabStrip extends LinearLayout {
         super(context, attrs);
 
         final Resources res = context.getResources();
+        final Resources.Theme theme = context.getTheme();
 
         mSelectedUnderlineThickness =
                 res.getDimensionPixelSize(R.dimen.pager_tab_underline_selected);
-        int underlineColor = res.getColor(R.color.contact_picker_tab_underline);
-        int backgroundColor = res.getColor(R.color.action_bar_background_color);
+        int underlineColor = res.getColor(R.color.contact_picker_tab_underline, theme);
+        int backgroundColor = res.getColor(R.color.action_bar_background_color, theme);
 
         mSelectedUnderlinePaint = new Paint();
         mSelectedUnderlinePaint.setColor(underlineColor);
@@ -97,6 +98,6 @@ public class ViewPagerTabStrip extends LinearLayout {
     }
 
     private boolean isRtl() {
-        return OsUtil.isAtLeastJB_MR2() ? getLayoutDirection() == View.LAYOUT_DIRECTION_RTL : false;
+        return getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
     }
 }

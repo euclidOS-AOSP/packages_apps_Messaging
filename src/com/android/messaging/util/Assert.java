@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +18,10 @@ package com.android.messaging.util;
 
 import android.os.Looper;
 
-import java.util.Arrays;
-
 public final class Assert {
-    public static @interface RunsOnMainThread {}
-    public static @interface DoesNotRunOnMainThread {}
-    public static @interface RunsOnAnyThread {}
+    public @interface RunsOnMainThread {}
+    public @interface DoesNotRunOnMainThread {}
+    public @interface RunsOnAnyThread {}
 
     private static final String TEST_THREAD_SUBSTRING = "test";
 
@@ -39,41 +38,10 @@ public final class Assert {
         sShouldCrash = sIsEngBuild = true;
     }
 
-    private static void refreshGservices(final BugleGservices gservices) {
-        sShouldCrash = sIsEngBuild;
-        if (!sShouldCrash) {
-            sShouldCrash = gservices.getBoolean(
-                    BugleGservicesKeys.ASSERTS_FATAL,
-                    BugleGservicesKeys.ASSERTS_FATAL_DEFAULT);
-        }
-    }
-
     // Static initializer block to find out if we're running an eng or
     // release build.
     static {
         setIfEngBuild();
-    }
-
-    // This is called from FactoryImpl once the Gservices class is initialized.
-    public static void initializeGservices (final BugleGservices gservices) {
-        gservices.registerForChanges(new Runnable() {
-            @Override
-            public void run() {
-                refreshGservices(gservices);
-            }
-        });
-        refreshGservices(gservices);
-    }
-
-    /**
-     * Halt execution if this is not an eng build.
-     * <p>Intended for use in code paths that should be run only for tests and never on
-     * a real build.
-     * <p>Note that this will crash on a user build even though asserts don't normally
-     * crash on a user build.
-     */
-    public static void isEngBuild() {
-        isTrueReleaseCheck(sIsEngBuild);
     }
 
     /**
@@ -94,15 +62,6 @@ public final class Assert {
         }
     }
 
-    /**
-     * Halt execution even in release builds if this isn't the case.
-     */
-    public static void isTrueReleaseCheck(final boolean condition) {
-        if (!condition) {
-            fail("Expected condition to be true", true);
-        }
-    }
-
     public static void equals(final int expected, final int actual) {
         if (expected != actual) {
             fail("Expected " + expected + " but got " + actual, false);
@@ -120,15 +79,6 @@ public final class Assert {
                 && (expected == null || actual == null || !expected.equals(actual))) {
             fail("Expected " + expected + " but got " + actual, false);
         }
-    }
-
-    public static void oneOf(final int actual, final int ...expected) {
-        for (int value : expected) {
-            if (actual == value) {
-                return;
-            }
-        }
-        fail("Expected value to be one of " + Arrays.toString(expected) + " but was " + actual);
     }
 
     public static void inRange(
@@ -207,7 +157,7 @@ public final class Assert {
             if (caller != null) {
                 // This log message can be de-obfuscated by the Proguard retrace tool, just like a
                 // full stack trace from a crash.
-                LogUtil.e(LogUtil.BUGLE_TAG, "\tat " + caller.toString());
+                LogUtil.e(LogUtil.BUGLE_TAG, "\tat " + caller);
             }
         }
     }

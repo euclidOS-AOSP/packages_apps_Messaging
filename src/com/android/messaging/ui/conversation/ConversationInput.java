@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +37,7 @@ public abstract class ConversationInput {
     }
 
     protected boolean mShowing;
-    protected ConversationInputBase mConversationInputBase;
+    protected final ConversationInputBase mConversationInputBase;
 
     public abstract boolean show(boolean animate);
     public abstract boolean hide(boolean animate);
@@ -60,7 +61,6 @@ public abstract class ConversationInput {
 
     /**
      * Toggle the visibility of this view.
-     * @param animate
      * @return true if the view is now shown, false if it now hidden
      */
     public boolean toggle(final boolean animate) {

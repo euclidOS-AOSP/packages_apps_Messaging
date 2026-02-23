@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +25,10 @@ import com.android.messaging.util.Assert.RunsOnAnyThread;
 import com.android.messaging.util.Assert.RunsOnMainThread;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.ThreadUtil;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 import java.util.TimeZone;
 
 /**
@@ -52,8 +53,8 @@ public class ActionMonitor {
          * @param result value returned by {@link Action#executeAction}
          */
         @RunsOnMainThread
-        abstract void onActionExecuted(ActionMonitor monitor, final Action action,
-                final Object data, final Object result);
+        void onActionExecuted(ActionMonitor monitor, final Action action,
+                              final Object data, final Object result);
     }
 
     /**
@@ -67,14 +68,14 @@ public class ActionMonitor {
          *               {@link Action#processBackgroundResponse}
          */
         @RunsOnMainThread
-        abstract void onActionSucceeded(ActionMonitor monitor,
-                final Action action, final Object data, final Object result);
+        void onActionSucceeded(ActionMonitor monitor,
+                               final Action action, final Object data, final Object result);
         /**
          * @param result value returned by {@link Action#processBackgroundFailure}
          */
         @RunsOnMainThread
-        abstract void onActionFailed(ActionMonitor monitor, final Action action,
-                final Object data, final Object result);
+        void onActionFailed(ActionMonitor monitor, final Action action,
+                            final Object data, final Object result);
     }
 
     /**
@@ -125,7 +126,6 @@ public class ActionMonitor {
     /**
      * Current state of action
      */
-    @VisibleForTesting
     protected int mState;
 
     /**
@@ -197,7 +197,7 @@ public class ActionMonitor {
      * Return flag to indicate if action is complete
      */
     public boolean isComplete() {
-        boolean complete = false;
+        boolean complete;
         synchronized (mLock) {
             complete = (mState == STATE_COMPLETE);
         }
@@ -237,7 +237,6 @@ public class ActionMonitor {
      * @param expectedOldState - expected existing state of action (can be UNKNOWN)
      * @param newState - new state which will be set
      */
-    @VisibleForTesting
     protected void updateState(final Action action, final int expectedOldState,
             final int newState) {
         ActionStateChangedListener listener = null;
@@ -274,12 +273,11 @@ public class ActionMonitor {
             monitor.updateState(action, expectedOldState, newState);
             newMonitorState = monitor.mState;
         }
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
-            df.setTimeZone(TimeZone.getTimeZone("UTC"));
-            LogUtil.v(TAG, "Operation-" + action.actionKey + ": @" + df.format(new Date())
-                    + "UTC State = " + oldMonitorState + " - " + newMonitorState);
-        }
+        final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS",
+                Locale.getDefault());
+        df.setTimeZone(TimeZone.getTimeZone("UTC"));
+        LogUtil.v(TAG, "Operation-" + action.actionKey + ": @" + df.format(new Date())
+                + "UTC State = " + oldMonitorState + " - " + newMonitorState);
     }
 
     /**
@@ -291,10 +289,9 @@ public class ActionMonitor {
      *                 else the value returned by {@link Action#processBackgroundResponse}
      *                 or {@link Action#processBackgroundFailure}
      */
-    private final void complete(final Action action,
-            final int expectedOldState, final Object result,
-            final boolean succeeded) {
-        ActionCompletedListener completedListener = null;
+    private void complete(final Action action, final int expectedOldState, final Object result,
+                          final boolean succeeded) {
+        ActionCompletedListener completedListener;
         synchronized (mLock) {
             setState(action, expectedOldState, STATE_COMPLETE);
             completedListener = mCompletedListener;
@@ -303,24 +300,21 @@ public class ActionMonitor {
         }
         if (completedListener != null) {
             // Marshal to UI thread
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    ActionCompletedListener listener = null;
-                    synchronized (mLock) {
-                        if (mCompletedListener != null) {
-                            listener = mCompletedListener;
-                        }
-                        mCompletedListener = null;
+            mHandler.post(() -> {
+                ActionCompletedListener listener = null;
+                synchronized (mLock) {
+                    if (mCompletedListener != null) {
+                        listener = mCompletedListener;
                     }
-                    if (listener != null) {
-                        if (succeeded) {
-                            listener.onActionSucceeded(ActionMonitor.this,
-                                    action, mData, result);
-                        } else {
-                            listener.onActionFailed(ActionMonitor.this,
-                                    action, mData, result);
-                        }
+                    mCompletedListener = null;
+                }
+                if (listener != null) {
+                    if (succeeded) {
+                        listener.onActionSucceeded(ActionMonitor.this,
+                                action, mData, result);
+                    } else {
+                        listener.onActionFailed(ActionMonitor.this,
+                                action, mData, result);
                     }
                 }
             });
@@ -346,12 +340,11 @@ public class ActionMonitor {
             monitor.complete(action, expectedOldState, result, succeeded);
             unregisterActionMonitorIfComplete(action.actionKey, monitor);
         }
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
-            df.setTimeZone(TimeZone.getTimeZone("UTC"));
-            LogUtil.v(TAG, "Operation-" + action.actionKey + ": @" + df.format(new Date())
-                    + "UTC State = " + oldMonitorState + " - " + STATE_COMPLETE);
-        }
+        final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS",
+                Locale.getDefault());
+        df.setTimeZone(TimeZone.getTimeZone("UTC"));
+        LogUtil.v(TAG, "Operation-" + action.actionKey + ": @" + df.format(new Date())
+                + "UTC State = " + oldMonitorState + " - " + STATE_COMPLETE);
     }
 
     /**
@@ -363,7 +356,7 @@ public class ActionMonitor {
      */
     final void executed(final Action action,
             final int expectedOldState, final boolean hasBackgroundActions, final Object result) {
-        ActionExecutedListener executedListener = null;
+        ActionExecutedListener executedListener;
         synchronized (mLock) {
             if (hasBackgroundActions) {
                 setState(action, expectedOldState, STATE_BACKGROUND_ACTIONS_QUEUED);
@@ -372,20 +365,17 @@ public class ActionMonitor {
         }
         if (executedListener != null) {
             // Marshal to UI thread
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    ActionExecutedListener listener = null;
-                    synchronized (mLock) {
-                        if (mExecutedListener != null) {
-                            listener = mExecutedListener;
-                            mExecutedListener = null;
-                        }
+            mHandler.post(() -> {
+                ActionExecutedListener listener = null;
+                synchronized (mLock) {
+                    if (mExecutedListener != null) {
+                        listener = mExecutedListener;
+                        mExecutedListener = null;
                     }
-                    if (listener != null) {
-                        listener.onActionExecuted(ActionMonitor.this,
-                                action, mData, result);
-                    }
+                }
+                if (listener != null) {
+                    listener.onActionExecuted(ActionMonitor.this,
+                            action, mData, result);
                 }
             });
         }
@@ -407,20 +397,17 @@ public class ActionMonitor {
             oldMonitorState = monitor.mState;
             monitor.executed(action, expectedOldState, hasBackgroundActions, result);
         }
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
-            df.setTimeZone(TimeZone.getTimeZone("UTC"));
-            LogUtil.v(TAG, "Operation-" + action.actionKey + ": @" + df.format(new Date())
-                    + "UTC State = " + oldMonitorState + " - EXECUTED");
-        }
+        final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS",
+                Locale.getDefault());
+        df.setTimeZone(TimeZone.getTimeZone("UTC"));
+        LogUtil.v(TAG, "Operation-" + action.actionKey + ": @" + df.format(new Date())
+                + "UTC State = " + oldMonitorState + " - EXECUTED");
     }
 
     /**
      * Map of action monitors indexed by actionKey
      */
-    @VisibleForTesting
-    static SimpleArrayMap<String, ActionMonitor> sActionMonitors =
-            new SimpleArrayMap<String, ActionMonitor>();
+    static final SimpleArrayMap<String, ActionMonitor> sActionMonitors = new SimpleArrayMap<>();
 
     /**
      * Insert new monitor into map
@@ -443,24 +430,11 @@ public class ActionMonitor {
      * Find monitor associated with particular action
      */
     private static ActionMonitor lookupActionMonitor(final String actionKey) {
-        ActionMonitor monitor = null;
+        ActionMonitor monitor;
         synchronized (sActionMonitors) {
             monitor = sActionMonitors.get(actionKey);
         }
         return monitor;
-    }
-
-    /**
-     * Remove monitor from map
-     */
-    @VisibleForTesting
-    static void unregisterActionMonitor(final String actionKey,
-            final ActionMonitor monitor) {
-        if (monitor != null) {
-            synchronized (sActionMonitors) {
-                sActionMonitors.remove(actionKey);
-            }
-        }
     }
 
     /**

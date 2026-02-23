@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +26,7 @@ import android.os.Parcelable;
 import android.telephony.SubscriptionInfo;
 import android.text.TextUtils;
 
-import androidx.appcompat.mms.MmsManager;
+import android.support.v7.mms.MmsManager;
 import androidx.collection.ArrayMap;
 
 import com.android.ex.chips.RecipientEntry;
@@ -44,8 +45,7 @@ import com.android.messaging.util.TextUtil;
  */
 public class ParticipantData implements Parcelable {
 
-    private static final ArrayMap<Integer, String> sSubIdtoParticipantIdCache =
-            new ArrayMap<Integer, String>();
+    private static final ArrayMap<Integer, String> sSubIdtoParticipantIdCache = new ArrayMap<>();
 
     // We always use -1 as default/invalid sub id although system may give us anything negative
     public static final int DEFAULT_SELF_SUB_ID = MmsManager.DEFAULT_SUB_ID;
@@ -151,21 +151,15 @@ public class ParticipantData implements Parcelable {
 
     public static ParticipantData getFromId(final DatabaseWrapper dbWrapper,
             final String participantId) {
-        Cursor cursor = null;
-        try {
-            cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
-                    ParticipantsQuery.PROJECTION,
-                    ParticipantColumns._ID + " =?",
-                    new String[] { participantId }, null, null, null);
+        try (Cursor cursor = dbWrapper.query(DatabaseHelper.PARTICIPANTS_TABLE,
+                ParticipantsQuery.PROJECTION,
+                ParticipantColumns._ID + " =?",
+                new String[]{participantId}, null, null, null)) {
 
             if (cursor.moveToFirst()) {
                 return ParticipantData.getFromCursor(cursor);
             } else {
                 return null;
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
     }
@@ -588,8 +582,7 @@ public class ParticipantData implements Parcelable {
         dest.writeString(mSubscriptionName);
     }
 
-    public static final Parcelable.Creator<ParticipantData> CREATOR
-    = new Parcelable.Creator<ParticipantData>() {
+    public static final Parcelable.Creator<ParticipantData> CREATOR = new Parcelable.Creator<>() {
         @Override
         public ParticipantData createFromParcel(final Parcel in) {
             return new ParticipantData(in);

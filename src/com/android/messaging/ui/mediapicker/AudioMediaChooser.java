@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +18,12 @@
 package com.android.messaging.ui.mediapicker;
 
 import android.Manifest;
-import android.content.pm.PackageManager;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.data.MessagePartData;
@@ -33,9 +36,18 @@ class AudioMediaChooser extends MediaChooser implements
         AudioRecordView.HostInterface {
     private View mEnabledView;
     private View mMissingPermissionView;
+    private final ActivityResultLauncher<String> mRequestPermissionLauncher;
 
     AudioMediaChooser(final MediaPicker mediaPicker) {
         super(mediaPicker);
+        mRequestPermissionLauncher = mediaPicker.registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), granted -> {
+                    if (mEnabledView == null) {
+                        return;
+                    }
+                    mEnabledView.setVisibility(granted ? View.VISIBLE : View.GONE);
+                    mMissingPermissionView.setVisibility(granted ? View.GONE : View.VISIBLE);
+        });
     }
 
     @Override
@@ -114,17 +126,6 @@ class AudioMediaChooser extends MediaChooser implements
     }
 
     private void requestRecordAudioPermission() {
-        mMediaPicker.requestPermissions(new String[] { Manifest.permission.RECORD_AUDIO },
-                MediaPicker.RECORD_AUDIO_PERMISSION_REQUEST_CODE);
-    }
-
-    @Override
-    protected void onRequestPermissionsResult(
-            final int requestCode, final String permissions[], final int[] grantResults) {
-        if (requestCode == MediaPicker.RECORD_AUDIO_PERMISSION_REQUEST_CODE) {
-            final boolean permissionGranted = grantResults[0] == PackageManager.PERMISSION_GRANTED;
-            mEnabledView.setVisibility(permissionGranted ? View.VISIBLE : View.GONE);
-            mMissingPermissionView.setVisibility(permissionGranted ? View.GONE : View.VISIBLE);
-        }
+        mRequestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
     }
 }

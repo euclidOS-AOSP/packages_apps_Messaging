@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,23 +23,23 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import androidx.appcompat.mms.MmsManager;
+import android.support.v7.mms.MmsManager;
+import android.support.v7.mms.pdu.AcknowledgeInd;
+import android.support.v7.mms.pdu.EncodedStringValue;
+import android.support.v7.mms.pdu.GenericPdu;
+import android.support.v7.mms.pdu.InvalidHeaderValueException;
+import android.support.v7.mms.pdu.NotifyRespInd;
+import android.support.v7.mms.pdu.PduHeaders;
+import android.support.v7.mms.pdu.PduParser;
+import android.support.v7.mms.pdu.RetrieveConf;
+import android.support.v7.mms.pdu.SendConf;
+import android.support.v7.mms.pdu.SendReq;
 import android.telephony.SmsManager;
 
 import com.android.messaging.datamodel.MmsFileProvider;
 import com.android.messaging.datamodel.action.SendMessageAction;
 import com.android.messaging.datamodel.data.MessageData;
-import com.android.messaging.mmslib.InvalidHeaderValueException;
-import com.android.messaging.mmslib.pdu.AcknowledgeInd;
-import com.android.messaging.mmslib.pdu.EncodedStringValue;
-import com.android.messaging.mmslib.pdu.GenericPdu;
-import com.android.messaging.mmslib.pdu.NotifyRespInd;
 import com.android.messaging.mmslib.pdu.PduComposer;
-import com.android.messaging.mmslib.pdu.PduHeaders;
-import com.android.messaging.mmslib.pdu.PduParser;
-import com.android.messaging.mmslib.pdu.RetrieveConf;
-import com.android.messaging.mmslib.pdu.SendConf;
-import com.android.messaging.mmslib.pdu.SendReq;
 import com.android.messaging.receiver.SendStatusReceiver;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.LogUtil;
@@ -62,10 +63,9 @@ public class MmsSender {
      * @param context Context
      * @param messageUri The unique URI of the message for identifying it during sending
      * @param sendReq The SendReq PDU of the message
-     * @throws MmsFailureException
      */
     public static void sendMms(final Context context, final int subId, final Uri messageUri,
-            final SendReq sendReq, final Bundle sentIntentExras) throws MmsFailureException {
+                               final SendReq sendReq, final Bundle sentIntentExras) throws MmsFailureException {
         sendMms(context,
                 subId,
                 messageUri,
@@ -83,8 +83,6 @@ public class MmsSender {
      * @param transactionId The transaction id of the MMS message
      * @param contentLocation The url of the MMS message
      * @param status The status to send with the NotifyRespInd
-     * @throws MmsFailureException
-     * @throws InvalidHeaderValueException
      */
     public static void sendNotifyResponseForMmsDownload(final Context context, final int subId,
             final byte[] transactionId, final String contentLocation, final int status)
@@ -110,8 +108,6 @@ public class MmsSender {
      * @param subId The SIM's subId we are currently using
      * @param transactionId The transaction id of the MMS message
      * @param contentLocation The url of the MMS message
-     * @throws MmsFailureException
-     * @throws InvalidHeaderValueException
      */
     public static void sendAcknowledgeForMmsDownload(final Context context, final int subId,
             final byte[] transactionId, final String contentLocation)
@@ -141,11 +137,10 @@ public class MmsSender {
      * @param pdu The PDU to send
      * @param responseImportant If the sending response is important. Responses to the
      * Sending of AcknowledgeInd and NotifyRespInd are not important.
-     * @throws MmsFailureException
      */
     private static void sendMms(final Context context, final int subId, final Uri messageUri,
-            final String locationUrl, final GenericPdu pdu, final boolean responseImportant,
-            final Bundle sentIntentExtras) throws MmsFailureException {
+                                final String locationUrl, final GenericPdu pdu, final boolean responseImportant,
+                                final Bundle sentIntentExtras) throws MmsFailureException {
         // Write PDU to temporary file to send to platform
         final Uri contentUri = writePduToTempFile(context, pdu, subId);
 
@@ -163,7 +158,7 @@ public class MmsSender {
                 context,
                 0 /*request code*/,
                 sentIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
 
         // Send the message
         MmsManager.sendMultimediaMessage(subId, context, contentUri, locationUrl,
@@ -241,8 +236,6 @@ public class MmsSender {
      *
      * @param context Context
      * @param contentLocation The url of the MMS message
-     * @throws MmsFailureException
-     * @throws InvalidHeaderValueException
      */
     public static void downloadMms(final Context context, final int subId,
             final String contentLocation, Bundle extras) throws MmsFailureException,
@@ -262,7 +255,7 @@ public class MmsSender {
                 context,
                 0 /*request code*/,
                 downloadedIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         MmsManager.downloadMultimediaMessage(subId, context, contentLocation, contentUri,
                 downloadedPendingIntent);

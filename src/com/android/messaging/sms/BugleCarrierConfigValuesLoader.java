@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +22,14 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.os.Bundle;
-import androidx.appcompat.mms.CarrierConfigValuesLoader;
+import android.support.v7.mms.CarrierConfigValuesLoader;
 import android.util.SparseArray;
 
 import com.android.messaging.R;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 
-/**
+/*
  * Carrier configuration loader
  *
  * Loader tries to load from resources. If there is MMS API available, also
@@ -92,12 +92,9 @@ public class BugleCarrierConfigValuesLoader implements CarrierConfigValuesLoader
     private String loadLocked(final int subId, final Bundle values) {
         // Load from resources in earlier platform
         loadFromResources(subId, values);
-        if (OsUtil.isAtLeastL()) {
-            // Load from system to override if system API exists
-            loadFromSystem(subId, values);
-            return "resources+system";
-        }
-        return "resources";
+        // Load from system to override if system API exists
+        loadFromSystem(subId, values);
+        return "resources+system";
     }
 
     /**
@@ -110,9 +107,7 @@ public class BugleCarrierConfigValuesLoader implements CarrierConfigValuesLoader
         try {
             final Bundle systemValues =
                     PhoneUtils.get(subId).getSmsManager().getCarrierConfigValues();
-            if (systemValues != null) {
-                values.putAll(systemValues);
-            }
+            values.putAll(systemValues);
         } catch (final Exception e) {
             LogUtil.w(LogUtil.BUGLE_TAG, "Calling system getCarrierConfigValues exception", e);
         }
@@ -128,24 +123,13 @@ public class BugleCarrierConfigValuesLoader implements CarrierConfigValuesLoader
         // Get a subscription-dependent context for loading the mms_config.xml
         final Context subContext = getSubDepContext(mContext, subId);
         // Load and parse the XML
-        XmlResourceParser parser = null;
-        try {
-            parser = subContext.getResources().getXml(R.xml.mms_config);
+        try (XmlResourceParser parser = subContext.getResources().getXml(R.xml.mms_config)) {
             final ApnsXmlProcessor processor = ApnsXmlProcessor.get(parser);
-            processor.setMmsConfigHandler(new ApnsXmlProcessor.MmsConfigHandler() {
-                @Override
-                public void process(final String mccMnc, final String key, final String value,
-                        final String type) {
-                    update(values, type, key, value);
-                }
-            });
+            processor.setMmsConfigHandler((mccMnc, key, value, type) ->
+                    update(values, type, key, value));
             processor.process();
         } catch (final Resources.NotFoundException e) {
             LogUtil.w(LogUtil.BUGLE_TAG, "Can not find mms_config.xml");
-        } finally {
-            if (parser != null) {
-                parser.close();
-            }
         }
     }
 
@@ -157,9 +141,6 @@ public class BugleCarrierConfigValuesLoader implements CarrierConfigValuesLoader
      * @return the sub-dependent Context
      */
     private static Context getSubDepContext(final Context context, final int subId) {
-        if (!OsUtil.isAtLeastL_MR1()) {
-            return context;
-        }
         final int[] mccMnc = PhoneUtils.get(subId).getMccMnc();
         final int mcc = mccMnc[0];
         final int mnc = mccMnc[1];

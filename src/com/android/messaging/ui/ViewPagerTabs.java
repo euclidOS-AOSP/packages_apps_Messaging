@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +20,6 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.Outline;
-import android.graphics.drawable.ColorDrawable;
-import androidx.viewpager.widget.PagerAdapter;
-import androidx.viewpager.widget.ViewPager;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -33,9 +31,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.viewpager.widget.PagerAdapter;
+import androidx.viewpager.widget.ViewPager;
+
 import com.android.messaging.Factory;
 import com.android.messaging.R;
-import com.android.messaging.util.OsUtil;
 
 /**
  * Lightweight implementation of ViewPager tabs. This looks similar to traditional actionBar tabs,
@@ -50,7 +50,7 @@ import com.android.messaging.util.OsUtil;
 public class ViewPagerTabs extends HorizontalScrollView implements ViewPager.OnPageChangeListener {
 
     ViewPager mPager;
-    private ViewPagerTabStrip mTabStrip;
+    private final ViewPagerTabStrip mTabStrip;
 
     /**
      * Linearlayout that will contain the TextViews serving as tabs. This is the only child
@@ -61,7 +61,7 @@ public class ViewPagerTabs extends HorizontalScrollView implements ViewPager.OnP
     final int mTextSize;
     final boolean mTextAllCaps;
     int mPrevSelected = -1;
-    int mSidePadding;
+    final int mSidePadding;
 
     private static final int TAB_SIDE_PADDING_IN_DPS = 10;
 
@@ -130,14 +130,12 @@ public class ViewPagerTabs extends HorizontalScrollView implements ViewPager.OnP
         a.recycle();
 
         // enable shadow casting from view bounds
-        if (OsUtil.isAtLeastL()) {
-            setOutlineProvider(new ViewOutlineProvider() {
-                @Override
-                public void getOutline(View view, Outline outline) {
-                    outline.setRect(0, 0, view.getWidth(), view.getHeight());
-                }
-            });
-        }
+        setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setRect(0, 0, view.getWidth(), view.getHeight());
+            }
+        });
     }
 
     public void setViewPager(ViewPager viewPager) {
@@ -159,12 +157,7 @@ public class ViewPagerTabs extends HorizontalScrollView implements ViewPager.OnP
         textView.setText(tabTitle);
         textView.setBackgroundResource(R.drawable.contact_picker_tab_background_selector);
         textView.setGravity(Gravity.CENTER);
-        textView.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mPager.setCurrentItem(getRtlPosition(position));
-            }
-        });
+        textView.setOnClickListener(v -> mPager.setCurrentItem(getRtlPosition(position)));
 
         // Assign various text appearance related attributes to child views.
         if (mTextStyle > 0) {
@@ -191,7 +184,7 @@ public class ViewPagerTabs extends HorizontalScrollView implements ViewPager.OnP
     public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
         position = getRtlPosition(position);
         int tabStripChildCount = mTabStrip.getChildCount();
-        if ((tabStripChildCount == 0) || (position < 0) || (position >= tabStripChildCount)) {
+        if (position < 0 || position >= tabStripChildCount) {
             return;
         }
 
@@ -202,7 +195,7 @@ public class ViewPagerTabs extends HorizontalScrollView implements ViewPager.OnP
     public void onPageSelected(int position) {
         position = getRtlPosition(position);
         int tabStripChildCount = mTabStrip.getChildCount();
-        if ((tabStripChildCount == 0) || (position < 0) || (position >= tabStripChildCount)) {
+        if (position < 0 || position >= tabStripChildCount) {
             return;
         }
 
@@ -223,7 +216,7 @@ public class ViewPagerTabs extends HorizontalScrollView implements ViewPager.OnP
     }
 
     private int getRtlPosition(int position) {
-        if (OsUtil.isAtLeastJB_MR2() && Factory.get().getApplicationContext().getResources()
+        if (Factory.get().getApplicationContext().getResources()
                 .getConfiguration().getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
             return mTabStrip.getChildCount() - 1 - position;
         }

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +24,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.provider.BaseColumns;
 
-import com.android.messaging.BugleApplication;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.data.ConversationListItemData;
 import com.android.messaging.datamodel.data.MessageData;
@@ -31,13 +31,6 @@ import com.android.messaging.datamodel.data.ParticipantData;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.Assert.DoesNotRunOnMainThread;
 import com.android.messaging.util.LogUtil;
-import com.google.common.annotations.VisibleForTesting;
-
-/**
- * TODO: Open Issues:
- * - Should we be storing the draft messages in the regular messages table or should we have a
- *   separate table for drafts to keep the normal messages query as simple as possible?
- */
 
 /**
  * Allows access to the SQL database.  This is package private.
@@ -45,7 +38,7 @@ import com.google.common.annotations.VisibleForTesting;
 public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String DATABASE_NAME = "bugle_db";
 
-    private static final int getDatabaseVersion(final Context context) {
+    private static int getDatabaseVersion(final Context context) {
         return Integer.parseInt(context.getResources().getString(R.string.database_version));
     }
 
@@ -136,15 +129,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         /* Participant count not including self (so will be 1 for 1:1 or bigger for group) */
         public static final String PARTICIPANT_COUNT = "participant_count";
 
-        /* Should notifications be enabled for this conversation? */
-        public static final String NOTIFICATION_ENABLED = "notification_enabled";
-
-        /* Notification sound used for the conversation */
-        public static final String NOTIFICATION_SOUND_URI = "notification_sound_uri";
-
-        /* Should vibrations be enabled for the conversation's notification? */
-        public static final String NOTIFICATION_VIBRATION = "notification_vibration";
-
         /* Conversation recipients include email address */
         public static final String INCLUDE_EMAIL_ADDRESS = "include_email_addr";
 
@@ -184,9 +168,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     + ConversationColumns.OTHER_PARTICIPANT_NORMALIZED_DESTINATION + " TEXT, "
                     + ConversationColumns.CURRENT_SELF_ID + " TEXT, "
                     + ConversationColumns.PARTICIPANT_COUNT + " INT DEFAULT(0), "
-                    + ConversationColumns.NOTIFICATION_ENABLED + " INT DEFAULT(1), "
-                    + ConversationColumns.NOTIFICATION_SOUND_URI + " TEXT, "
-                    + ConversationColumns.NOTIFICATION_VIBRATION + " INT DEFAULT(1), "
                     + ConversationColumns.INCLUDE_EMAIL_ADDRESS + " INT DEFAULT(0), "
                     + ConversationColumns.SMS_SERVICE_CENTER + " TEXT ,"
                     + ConversationColumns.IS_ENTERPRISE + " INT DEFAULT(0)"
@@ -596,18 +577,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private DatabaseHelper(final Context context) {
         super(context, DATABASE_NAME, null, getDatabaseVersion(context), null);
         mApplicationContext = context;
-    }
-
-    /**
-     * Test method that always instantiates a new DatabaseHelper instance. This should
-     * be used ONLY by the tests and never by the real application.
-     * @param context Test context.
-     * @return Brand new DatabaseHelper instance.
-     */
-    @VisibleForTesting
-    static DatabaseHelper getNewInstanceForTest(final Context context) {
-        Assert.isTrue(BugleApplication.isRunningTests());
-        return new DatabaseHelper(context);
     }
 
     /**

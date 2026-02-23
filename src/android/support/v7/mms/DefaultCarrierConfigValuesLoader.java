@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.content.Context;
 import android.content.res.Resources;
@@ -67,12 +68,8 @@ class DefaultCarrierConfigValuesLoader implements CarrierConfigValuesLoader {
     }
 
     private void loadLocked(final int subId, final Bundle values) {
-        // For K and earlier, load from resources
         loadFromResources(subId, values);
-        if (Utils.hasMmsApi()) {
-            // For L and later, also load from system MMS service
-            loadFromSystem(subId, values);
-        }
+        loadFromSystem(subId, values);
     }
 
     /**
@@ -95,32 +92,23 @@ class DefaultCarrierConfigValuesLoader implements CarrierConfigValuesLoader {
     private void loadFromResources(final int subId, final Bundle values) {
         // Get a subscription-dependent context for loading the mms_config.xml
         final Context subContext = Utils.getSubDepContext(mContext, subId);
-        XmlResourceParser xml = null;
-        try {
-            xml = subContext.getResources().getXml(R.xml.mms_config);
-            new CarrierConfigXmlParser(xml, new CarrierConfigXmlParser.KeyValueProcessor() {
-                @Override
-                public void process(String type, String key, String value) {
-                    try {
-                        if (KEY_TYPE_INT.equals(type)) {
-                            values.putInt(key, Integer.parseInt(value));
-                        } else if (KEY_TYPE_BOOL.equals(type)) {
-                            values.putBoolean(key, Boolean.parseBoolean(value));
-                        } else if (KEY_TYPE_STRING.equals(type)) {
-                            values.putString(key, value);
-                        }
-                    } catch (final NumberFormatException e) {
-                        Log.w(MmsService.TAG, "Load carrier value from resources: "
-                                + "invalid " + key + "," + value + "," + type);
+        try (XmlResourceParser xml = subContext.getResources().getXml(R.xml.mms_config)) {
+            new CarrierConfigXmlParser(xml, (type, key, value) -> {
+                try {
+                    if (KEY_TYPE_INT.equals(type)) {
+                        values.putInt(key, Integer.parseInt(value));
+                    } else if (KEY_TYPE_BOOL.equals(type)) {
+                        values.putBoolean(key, Boolean.parseBoolean(value));
+                    } else if (KEY_TYPE_STRING.equals(type)) {
+                        values.putString(key, value);
                     }
+                } catch (final NumberFormatException e) {
+                    Log.w(MmsService.TAG, "Load carrier value from resources: "
+                            + "invalid " + key + "," + value + "," + type);
                 }
             }).parse();
         } catch (final Resources.NotFoundException e) {
             Log.w(MmsService.TAG, "Can not get mms_config.xml");
-        } finally {
-            if (xml != null) {
-                xml.close();
-            }
         }
     }
 }

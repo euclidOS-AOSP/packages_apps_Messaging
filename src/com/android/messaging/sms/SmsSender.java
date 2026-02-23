@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,11 +27,12 @@ import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsManager;
 import android.text.TextUtils;
 
+import androidx.annotation.NonNull;
+
 import com.android.messaging.Factory;
 import com.android.messaging.R;
 import com.android.messaging.receiver.SendStatusReceiver;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.BugleGservices;
 import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.PhoneUtils;
@@ -59,8 +61,8 @@ public class SmsSender {
     /*
      * A map for pending sms messages. The key is the random request UUID.
      */
-    private static ConcurrentHashMap<Uri, SendResult> sPendingMessageMap =
-            new ConcurrentHashMap<Uri, SendResult>();
+    private static final ConcurrentHashMap<Uri, SendResult> sPendingMessageMap =
+            new ConcurrentHashMap<>();
 
     private static final Random RANDOM = new Random();
 
@@ -124,6 +126,7 @@ public class SmsSender {
             }
         }
 
+        @NonNull
         @Override
         public String toString() {
             final StringBuilder sb = new StringBuilder();
@@ -145,10 +148,8 @@ public class SmsSender {
                 UiUtils.showToastAtBottom(getSendErrorToastMessage(context, subId, errorCode));
             }
         } else {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "SmsSender: received sent result. " + " requestId=" + requestId
-                        + " partId=" + partId + " resultCode=" + resultCode);
-            }
+            LogUtil.v(TAG, "SmsSender: received sent result. " + " requestId=" + requestId
+                    + " partId=" + partId + " resultCode=" + resultCode);
         }
         if (requestId != null) {
             final SendResult result = sPendingMessageMap.get(requestId);
@@ -179,16 +180,14 @@ public class SmsSender {
     // This should be called from a RequestWriter queue thread
     public static SendResult sendMessage(final Context context, final int subId, String dest,
             String message, final String serviceCenter, final boolean requireDeliveryReport,
-            final Uri messageUri) throws SmsException {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "SmsSender: sending message. " +
-                    "dest=" + dest + " message=" + message +
-                    " serviceCenter=" + serviceCenter +
-                    " requireDeliveryReport=" + requireDeliveryReport +
-                    " requestId=" + messageUri);
-        }
+            final Uri messageUri) throws Exception {
+        LogUtil.v(TAG, "SmsSender: sending message. " +
+                "dest=" + dest + " message=" + message +
+                " serviceCenter=" + serviceCenter +
+                " requireDeliveryReport=" + requireDeliveryReport +
+                " requestId=" + messageUri);
         if (TextUtils.isEmpty(message)) {
-            throw new SmsException("SmsSender: empty text message");
+            throw new Exception("SmsSender: empty text message");
         }
         // Get the real dest and message for email or alias if dest is email or alias
         // Or sanitize the dest if dest is a number
@@ -205,13 +204,13 @@ public class SmsSender {
             dest = PhoneNumberUtils.stripSeparators(dest);
         }
         if (TextUtils.isEmpty(dest)) {
-            throw new SmsException("SmsSender: empty destination address");
+            throw new Exception("SmsSender: empty destination address");
         }
         // Divide the input message by SMS length limit
         final SmsManager smsManager = PhoneUtils.get(subId).getSmsManager();
         final ArrayList<String> messages = smsManager.divideMessage(message);
         if (messages == null || messages.size() < 1) {
-            throw new SmsException("SmsSender: fails to divide message");
+            throw new Exception("SmsSender: fails to divide message");
         }
         // Prepare the send result, which collects the send status for each part
         final SendResult pendingResult = new SendResult(messages.size());
@@ -221,9 +220,8 @@ public class SmsSender {
                 context, subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri);
         // Wait for pending intent to come back
         synchronized (pendingResult) {
-            final long smsSendTimeoutInMillis = BugleGservices.get().getLong(
-                    BugleGservicesKeys.SMS_SEND_TIMEOUT_IN_MILLIS,
-                    BugleGservicesKeys.SMS_SEND_TIMEOUT_IN_MILLIS_DEFAULT);
+            final long smsSendTimeoutInMillis =
+                    BugleGservicesKeys.SMS_SEND_TIMEOUT_IN_MILLIS_DEFAULT;
             final long beginTime = SystemClock.elapsedRealtime();
             long waitTime = smsSendTimeoutInMillis;
             // We could possibly be woken up while still pending
@@ -240,22 +238,20 @@ public class SmsSender {
         }
         // Either we timed out or have all the results (success or failure)
         sPendingMessageMap.remove(messageUri);
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "SmsSender: sending completed. " +
-                    "dest=" + dest + " message=" + message + " result=" + pendingResult);
-        }
+        LogUtil.v(TAG, "SmsSender: sending completed. " +
+                "dest=" + dest + " message=" + message + " result=" + pendingResult);
         return pendingResult;
     }
 
     // Actually sending the message using SmsManager
     private static void sendInternal(final Context context, final int subId, String dest,
             final ArrayList<String> messages, final String serviceCenter,
-            final boolean requireDeliveryReport, final Uri messageUri) throws SmsException {
+            final boolean requireDeliveryReport, final Uri messageUri) throws Exception {
         Assert.notNull(context);
         final SmsManager smsManager = PhoneUtils.get(subId).getSmsManager();
         final int messageCount = messages.size();
-        final ArrayList<PendingIntent> deliveryIntents = new ArrayList<PendingIntent>(messageCount);
-        final ArrayList<PendingIntent> sentIntents = new ArrayList<PendingIntent>(messageCount);
+        final ArrayList<PendingIntent> deliveryIntents = new ArrayList<>(messageCount);
+        final ArrayList<PendingIntent> sentIntents = new ArrayList<>(messageCount);
         for (int i = 0; i < messageCount; i++) {
             // Make pending intents different for each message part
             final int partId = (messageCount <= 1 ? 0 : i + 1);
@@ -267,7 +263,7 @@ public class SmsSender {
                         partId,
                         getSendStatusIntent(context, SendStatusReceiver.MESSAGE_DELIVERED_ACTION,
                                 messageUri, partId, subId),
-                        0/*flag*/));
+                        PendingIntent.FLAG_MUTABLE));
             } else {
                 deliveryIntents.add(null);
             }
@@ -276,7 +272,7 @@ public class SmsSender {
                     partId,
                     getSendStatusIntent(context, SendStatusReceiver.MESSAGE_SENT_ACTION,
                             messageUri, partId, subId),
-                    0/*flag*/));
+                    PendingIntent.FLAG_IMMUTABLE));
         }
         try {
             if (MmsConfig.get(subId).getSendMultipartSmsAsSeparateMessages()) {
@@ -293,7 +289,7 @@ public class SmsSender {
                         dest, serviceCenter, messages, sentIntents, deliveryIntents);
             }
         } catch (final Exception e) {
-            throw new SmsException("SmsSender: caught exception in sending " + e);
+            throw new Exception("SmsSender: caught exception in sending " + e);
         }
     }
 

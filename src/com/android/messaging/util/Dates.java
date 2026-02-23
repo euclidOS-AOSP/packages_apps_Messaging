@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +22,12 @@ import android.text.format.DateUtils;
 
 import com.android.messaging.Factory;
 import com.android.messaging.R;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Locale;
 
@@ -45,9 +45,9 @@ public class Dates {
     // Callers of methods in this class should never have to specify these; this is really
     // intended only for unit tests.
     @SuppressWarnings("deprecation")
-    @VisibleForTesting public static final int FORCE_12_HOUR = DateUtils.FORMAT_12HOUR;
+    public static final int FORCE_12_HOUR = DateUtils.FORMAT_12HOUR;
     @SuppressWarnings("deprecation")
-    @VisibleForTesting public static final int FORCE_24_HOUR = DateUtils.FORMAT_24HOUR;
+    public static final int FORCE_24_HOUR = DateUtils.FORMAT_24HOUR;
 
     /**
      * Private default constructor
@@ -109,8 +109,8 @@ public class Dates {
             flags = FORCE_12_HOUR;
         }
         return getOlderThanAYearTimestamp(time,
-                context.getResources().getConfiguration().locale, false /*abbreviated*/,
-                flags);
+                context.getResources().getConfiguration().getLocales().get(0),
+                false /*abbreviated*/, flags);
     }
 
     private static CharSequence getTimeString(final long time, final boolean abbreviated,
@@ -123,10 +123,10 @@ public class Dates {
             flags = FORCE_12_HOUR;
         }
         return getTimestamp(time, System.currentTimeMillis(), abbreviated,
-                context.getResources().getConfiguration().locale, flags, minPeriodToday);
+                context.getResources().getConfiguration().getLocales().get(0), flags,
+                minPeriodToday);
     }
 
-    @VisibleForTesting
     public static CharSequence getTimestamp(final long time, final long now,
             final boolean abbreviated, final Locale locale, final int flags,
             final boolean minPeriodToday) {
@@ -170,9 +170,9 @@ public class Dates {
             final String format24, final String format12) {
         SimpleDateFormat formatter;
         if ((flags & FORCE_24_HOUR) == FORCE_24_HOUR) {
-            formatter = new SimpleDateFormat(format24);
+            formatter = new SimpleDateFormat(format24, Locale.getDefault());
         } else {
-            formatter = new SimpleDateFormat(format12);
+            formatter = new SimpleDateFormat(format12, Locale.getDefault());
         }
         return formatter.format(new Date(time));
     }

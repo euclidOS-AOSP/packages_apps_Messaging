@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +17,13 @@
 
 package com.android.messaging.datamodel.data;
 
-import android.app.LoaderManager;
 import android.content.Context;
-import android.content.Loader;
 import android.database.Cursor;
 import android.os.Bundle;
+
+import androidx.annotation.NonNull;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.content.Loader;
 
 import com.android.messaging.datamodel.BoundCursorLoader;
 import com.android.messaging.datamodel.BugleNotifications;
@@ -51,8 +54,8 @@ public class ConversationListData extends BindableData
             "(" + ConversationListViewColumns.ARCHIVE_STATUS + " = 0)";
 
     public interface ConversationListDataListener {
-        public void onConversationListCursorUpdated(ConversationListData data, Cursor cursor);
-        public void setBlockedParticipantsAvailable(boolean blockedAvailable);
+        void onConversationListCursorUpdated(ConversationListData data, Cursor cursor);
+        void setBlockedParticipantsAvailable(boolean blockedAvailable);
     }
 
     private ConversationListDataListener mListener;
@@ -78,8 +81,9 @@ public class ConversationListData extends BindableData
     private static final int INDEX_BLOCKED_PARTICIPANTS_NORMALIZED_DESTINATION = 1;
 
     // all blocked participants
-    private final HashSet<String> mBlockedParticipants = new HashSet<String>();
+    private final HashSet<String> mBlockedParticipants = new HashSet<>();
 
+    @NonNull
     @Override
     public Loader<Cursor> onCreateLoader(final int id, final Bundle args) {
         final String bindingId = args.getString(BINDING_ID);
@@ -115,7 +119,7 @@ public class ConversationListData extends BindableData
      * {@inheritDoc}
      */
     @Override
-    public void onLoadFinished(final Loader<Cursor> generic, final Cursor data) {
+    public void onLoadFinished(@NonNull final Loader<Cursor> generic, final Cursor data) {
         final BoundCursorLoader loader = (BoundCursorLoader) generic;
         if (isBound(loader.getBindingId())) {
             switch (loader.getId()) {
@@ -144,7 +148,7 @@ public class ConversationListData extends BindableData
      * {@inheritDoc}
      */
     @Override
-    public void onLoaderReset(final Loader<Cursor> generic) {
+    public void onLoaderReset(@NonNull final Loader<Cursor> generic) {
         final BoundCursorLoader loader = (BoundCursorLoader) generic;
         if (isBound(loader.getBindingId())) {
             switch (loader.getId()) {

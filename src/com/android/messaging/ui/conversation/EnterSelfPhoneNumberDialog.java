@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +16,16 @@
  */
 package com.android.messaging.ui.conversation;
 
-import android.app.AlertDialog;
 import android.app.Dialog;
-import android.app.DialogFragment;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.widget.EditText;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.fragment.app.DialogFragment;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.ParticipantRefresh;
@@ -43,6 +45,7 @@ public class EnterSelfPhoneNumberDialog extends DialogFragment {
         return dialog;
     }
 
+    @NonNull
     @Override
     public Dialog onCreateDialog(final Bundle savedInstanceState) {
         final Context context = getActivity();
@@ -53,30 +56,18 @@ public class EnterSelfPhoneNumberDialog extends DialogFragment {
         builder.setTitle(R.string.enter_phone_number_title)
                 .setMessage(R.string.enter_phone_number_text)
                 .setView(mEditText)
-                .setNegativeButton(android.R.string.cancel,
-                        new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(final DialogInterface dialog,
-                                    final int button) {
-                                dismiss();
-                            }
-                })
-                .setPositiveButton(android.R.string.ok,
-                        new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(final DialogInterface dialog,
-                                    final int button) {
-                                final String newNumber = mEditText.getText().toString();
-                                dismiss();
-                                if (!TextUtils.isEmpty(newNumber)) {
-                                    savePhoneNumberInPrefs(newNumber);
-                                    // TODO: Remove this toast and just auto-send
-                                    // the message instead
-                                    UiUtils.showToast(
-                                            R.string
-                                        .toast_after_setting_default_sms_app_for_message_send);
-                                }
-                            }
+                .setNegativeButton(android.R.string.cancel, (dialog, button) -> dismiss())
+                .setPositiveButton(android.R.string.ok, (dialog, button) -> {
+                    final String newNumber = mEditText.getText().toString();
+                    dismiss();
+                    if (!TextUtils.isEmpty(newNumber)) {
+                        savePhoneNumberInPrefs(newNumber);
+                        // TODO: Remove this toast and just auto-send
+                        // the message instead
+                        UiUtils.showToast(
+                                R.string
+                            .toast_after_setting_default_sms_app_for_message_send);
+                    }
                 });
         return builder.create();
     }

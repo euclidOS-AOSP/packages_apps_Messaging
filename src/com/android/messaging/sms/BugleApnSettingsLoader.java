@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +17,19 @@
 
 package com.android.messaging.sms;
 
-import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.provider.Telephony;
-import androidx.appcompat.mms.ApnSettingsLoader;
-import androidx.appcompat.mms.MmsManager;
+import android.support.v7.mms.ApnSettingsLoader;
+import android.support.v7.mms.MmsManager;
 import android.text.TextUtils;
 import android.util.SparseArray;
 
 import com.android.messaging.datamodel.data.ParticipantData;
 import com.android.messaging.mmslib.SqliteWrapper;
-import com.android.messaging.util.BugleGservices;
-import com.android.messaging.util.BugleGservicesKeys;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 
 import java.net.URI;
@@ -41,13 +37,11 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
+/*
  * APN loader for default SMS SIM
- *
  * This loader tries to load APNs from 3 sources in order:
- * 1. Gservices setting
- * 2. System APN table
- * 3. Local APN table
+ * 1. System APN table
+ * 2. Local APN table
  */
 public class BugleApnSettingsLoader implements ApnSettingsLoader {
     /**
@@ -123,151 +117,6 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
         public void setSuccess() {
             // Do nothing
         }
-
-        public boolean equals(final BaseApn other) {
-            return TextUtils.equals(mMmsc, other.getMmsc()) &&
-                    TextUtils.equals(mMmsProxy, other.getMmsProxy()) &&
-                    mMmsProxyPort == other.getMmsProxyPort();
-        }
-    }
-
-    /**
-     * The APN represented by the local APN table row
-     */
-    private static class DatabaseApn implements Apn {
-        private static final ContentValues CURRENT_NULL_VALUE;
-        private static final ContentValues CURRENT_SET_VALUE;
-        static {
-            CURRENT_NULL_VALUE = new ContentValues(1);
-            CURRENT_NULL_VALUE.putNull(Telephony.Carriers.CURRENT);
-            CURRENT_SET_VALUE = new ContentValues(1);
-            CURRENT_SET_VALUE.put(Telephony.Carriers.CURRENT, "1"); // 1 for auto selected APN
-        }
-        private static final String CLEAR_UPDATE_SELECTION = Telephony.Carriers.CURRENT + " =?";
-        private static final String[] CLEAR_UPDATE_SELECTION_ARGS = new String[] { "1" };
-        private static final String SET_UPDATE_SELECTION = Telephony.Carriers._ID + " =?";
-
-        /**
-         * Create an APN loaded from local database
-         *
-         * @param apns the in-memory APN list
-         * @param typesIn the APN type field
-         * @param mmscIn the APN mmsc field
-         * @param proxyIn the APN mmsproxy field
-         * @param portIn the APN mmsport field
-         * @param rowId the APN's row ID in database
-         * @param current the value of CURRENT column in database
-         * @return an in-memory APN instance for database APN row, null if parameter invalid
-         */
-        public static DatabaseApn from(final List<Apn> apns, final String typesIn,
-                final String mmscIn, final String proxyIn, final String portIn,
-                final long rowId, final int current) {
-            if (apns == null) {
-                return null;
-            }
-            final BaseApn base = BaseApn.from(typesIn, mmscIn, proxyIn, portIn);
-            if (base == null) {
-                return null;
-            }
-            for (final ApnSettingsLoader.Apn apn : apns) {
-                if (apn instanceof DatabaseApn && ((DatabaseApn) apn).equals(base)) {
-                    return null;
-                }
-            }
-            return new DatabaseApn(apns, base, rowId, current);
-        }
-
-        private final List<Apn> mApns;
-        private final BaseApn mBase;
-        private final long mRowId;
-        private int mCurrent;
-
-        public DatabaseApn(final List<Apn> apns, final BaseApn base, final long rowId,
-                final int current) {
-            mApns = apns;
-            mBase = base;
-            mRowId = rowId;
-            mCurrent = current;
-        }
-
-        @Override
-        public String getMmsc() {
-            return mBase.getMmsc();
-        }
-
-        @Override
-        public String getMmsProxy() {
-            return mBase.getMmsProxy();
-        }
-
-        @Override
-        public int getMmsProxyPort() {
-            return mBase.getMmsProxyPort();
-        }
-
-        @Override
-        public void setSuccess() {
-            moveToListHead();
-            setCurrentInDatabase();
-        }
-
-        /**
-         * Try to move this APN to the head of in-memory list
-         */
-        private void moveToListHead() {
-            // If this is being marked as a successful APN, move it to the top of the list so
-            // next time it will be tried first
-            boolean moved = false;
-            synchronized (mApns) {
-                if (mApns.get(0) != this) {
-                    mApns.remove(this);
-                    mApns.add(0, this);
-                    moved = true;
-                }
-            }
-            if (moved) {
-                LogUtil.d(LogUtil.BUGLE_TAG, "Set APN ["
-                        + "MMSC=" + getMmsc() + ", "
-                        + "PROXY=" + getMmsProxy() + ", "
-                        + "PORT=" + getMmsProxyPort() + "] to be first");
-            }
-        }
-
-        /**
-         * Try to set the APN to be CURRENT in its database table
-         */
-        private void setCurrentInDatabase() {
-            synchronized (this) {
-                if (mCurrent > 0) {
-                    // Already current
-                    return;
-                }
-                mCurrent = 1;
-            }
-            LogUtil.d(LogUtil.BUGLE_TAG, "Set APN @" + mRowId + " to be CURRENT in local db");
-            final SQLiteDatabase database = ApnDatabase.getApnDatabase().getWritableDatabase();
-            database.beginTransaction();
-            try {
-                // clear the previous current=1 apn
-                // we don't clear current=2 apn since it is manually selected by user
-                // and we should not override it.
-                database.update(ApnDatabase.APN_TABLE, CURRENT_NULL_VALUE,
-                        CLEAR_UPDATE_SELECTION, CLEAR_UPDATE_SELECTION_ARGS);
-                // set this one to be current (1)
-                database.update(ApnDatabase.APN_TABLE, CURRENT_SET_VALUE, SET_UPDATE_SELECTION,
-                        new String[] { Long.toString(mRowId) });
-                database.setTransactionSuccessful();
-            } finally {
-                database.endTransaction();
-            }
-        }
-
-        public boolean equals(final BaseApn other) {
-            if (other == null) {
-                return false;
-            }
-            return mBase.equals(other);
-        }
     }
 
     /**
@@ -284,14 +133,7 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
             Telephony.Carriers.MMSPROXY,
             Telephony.Carriers.MMSPORT,
     };
-    private static final String[] APN_PROJECTION_LOCAL = {
-            Telephony.Carriers.TYPE,
-            Telephony.Carriers.MMSC,
-            Telephony.Carriers.MMSPROXY,
-            Telephony.Carriers.MMSPORT,
-            Telephony.Carriers.CURRENT,
-            Telephony.Carriers._ID,
-    };
+
     private static final int COLUMN_TYPE         = 0;
     private static final int COLUMN_MMSC         = 1;
     private static final int COLUMN_MMSPROXY     = 2;
@@ -301,8 +143,6 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
 
     private static final String SELECTION_APN = Telephony.Carriers.APN + "=?";
     private static final String SELECTION_CURRENT = Telephony.Carriers.CURRENT + " IS NOT NULL";
-    private static final String SELECTION_NUMERIC = Telephony.Carriers.NUMERIC + "=?";
-    private static final String ORDER_BY = Telephony.Carriers.CURRENT + " DESC";
 
     private final Context mContext;
 
@@ -336,41 +176,8 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
     }
 
     private void loadLocked(final int subId, final String apnName, final List<Apn> apns) {
-        // Try Gservices first
-        loadFromGservices(apns);
-        if (apns.size() > 0) {
-            return;
-        }
         // Try system APN table
         loadFromSystem(subId, apnName, apns);
-        if (apns.size() > 0) {
-            return;
-        }
-        // Try local APN table
-        loadFromLocalDatabase(apnName, apns);
-        if (apns.size() <= 0) {
-            LogUtil.w(LogUtil.BUGLE_TAG, "Failed to load any APN");
-        }
-    }
-
-    /**
-     * Load from Gservices if APN setting is set in Gservices
-     *
-     * @param apns the list used to return results
-     */
-    private void loadFromGservices(final List<Apn> apns) {
-        final BugleGservices gservices = BugleGservices.get();
-        final String mmsc = gservices.getString(BugleGservicesKeys.MMS_MMSC, null);
-        if (TextUtils.isEmpty(mmsc)) {
-            return;
-        }
-        LogUtil.i(LogUtil.BUGLE_TAG, "Loading APNs from gservices");
-        final String proxy = gservices.getString(BugleGservicesKeys.MMS_PROXY_ADDRESS, null);
-        final int port = gservices.getInt(BugleGservicesKeys.MMS_PROXY_PORT, -1);
-        final Apn apn = BaseApn.from("mms", mmsc, proxy, Integer.toString(port));
-        if (apn != null) {
-            apns.add(apn);
-        }
     }
 
     /**
@@ -383,12 +190,12 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
      */
     private void loadFromSystem(final int subId, final String apnName, final List<Apn> apns) {
         Uri uri;
-        if (OsUtil.isAtLeastL_MR1() && subId != MmsManager.DEFAULT_SUB_ID) {
+        if (subId != MmsManager.DEFAULT_SUB_ID) {
             uri = Uri.withAppendedPath(Telephony.Carriers.CONTENT_URI, "/subId/" + subId);
         } else {
             uri = Telephony.Carriers.CONTENT_URI;
         }
-        Cursor cursor = null;
+        Cursor cursor;
         try {
             for (; ; ) {
                 // Try different combinations of queries. Some would work on some platforms.
@@ -484,85 +291,6 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
         return null;
     }
 
-    /**
-     * Load matching APNs from local APN table.
-     * We try both using the APN name and not using the APN name.
-     *
-     * @param apnName the APN name
-     * @param apns the list of results to return
-     */
-    private void loadFromLocalDatabase(final String apnName, final List<Apn> apns) {
-        LogUtil.i(LogUtil.BUGLE_TAG, "Loading APNs from local APN table");
-        final SQLiteDatabase database = ApnDatabase.getApnDatabase().getWritableDatabase();
-        final String mccMnc = PhoneUtils.getMccMncString(PhoneUtils.getDefault().getMccMnc());
-        Cursor cursor = null;
-        cursor = queryLocalDatabase(database, mccMnc, apnName);
-        if (cursor == null) {
-            cursor = queryLocalDatabase(database, mccMnc, null/*apnName*/);
-        }
-        if (cursor == null) {
-            LogUtil.w(LogUtil.BUGLE_TAG, "Could not find any APN in local table");
-            return;
-        }
-        try {
-            while (cursor.moveToNext()) {
-                final Apn apn = DatabaseApn.from(apns,
-                        cursor.getString(COLUMN_TYPE),
-                        cursor.getString(COLUMN_MMSC),
-                        cursor.getString(COLUMN_MMSPROXY),
-                        cursor.getString(COLUMN_MMSPORT),
-                        cursor.getLong(COLUMN_ID),
-                        cursor.getInt(COLUMN_CURRENT));
-                if (apn != null) {
-                    apns.add(apn);
-                }
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    /**
-     * Make a query of local APN table based on MCC/MNC and APN name, sorted by CURRENT
-     * column in descending order
-     *
-     * @param db the local database
-     * @param numeric the MCC/MNC string
-     * @param apnName the optional APN name to match
-     * @return the cursor of the query, null if no result
-     */
-    private static Cursor queryLocalDatabase(final SQLiteDatabase db, final String numeric,
-            final String apnName) {
-        final String selection;
-        final String[] selectionArgs;
-        if (TextUtils.isEmpty(apnName)) {
-            selection = SELECTION_NUMERIC;
-            selectionArgs = new String[] { numeric };
-        } else {
-            selection = SELECTION_NUMERIC + " AND " + SELECTION_APN;
-            selectionArgs = new String[] { numeric, apnName };
-        }
-        Cursor cursor = null;
-        try {
-            cursor = db.query(ApnDatabase.APN_TABLE, APN_PROJECTION_LOCAL, selection, selectionArgs,
-                    null/*groupBy*/, null/*having*/, ORDER_BY, null/*limit*/);
-        } catch (final SQLiteException e) {
-            LogUtil.w(LogUtil.BUGLE_TAG, "Local APN table does not exist. Try rebuilding.", e);
-            ApnDatabase.forceBuildAndLoadApnTables();
-            cursor = db.query(ApnDatabase.APN_TABLE, APN_PROJECTION_LOCAL, selection, selectionArgs,
-                    null/*groupBy*/, null/*having*/, ORDER_BY, null/*limit*/);
-        }
-        if (cursor == null || cursor.getCount() < 1) {
-            if (cursor != null) {
-                cursor.close();
-            }
-            LogUtil.w(LogUtil.BUGLE_TAG, "Query local APNs with apn " + apnName
-                    + " returned empty");
-            return null;
-        }
-        return cursor;
-    }
-
     private static String trimWithNullCheck(final String value) {
         return value != null ? value.trim() : null;
     }
@@ -585,7 +313,7 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
             return addr;
         }
         final StringBuilder builder = new StringBuilder(16);
-        String result = null;
+        String result;
         for (int i = 0; i < 4; i++) {
             try {
                 if (octets[i].length() > 3) {
@@ -621,26 +349,5 @@ public class BugleApnSettingsLoader implements ApnSettingsLoader {
             }
         }
         return false;
-    }
-
-    /**
-     * Get the ID of first APN to try
-     */
-    public static String getFirstTryApn(final SQLiteDatabase database, final String mccMnc) {
-        String key = null;
-        Cursor cursor = null;
-        try {
-            cursor = queryLocalDatabase(database, mccMnc, null/*apnName*/);
-            if (cursor.moveToFirst()) {
-                key = cursor.getString(ApnDatabase.COLUMN_ID);
-            }
-        } catch (final Exception e) {
-            // Nothing to do
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
-        }
-        return key;
     }
 }

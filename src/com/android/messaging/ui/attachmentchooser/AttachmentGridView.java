@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,8 +142,8 @@ public class AttachmentGridView extends GridView implements
             final int partCount = in.readInt();
             unselectedParts = new MessagePartData[partCount];
             for (int i = 0; i < partCount; i++) {
-                unselectedParts[i] = ((MessagePartData) in.readParcelable(
-                        MessagePartData.class.getClassLoader()));
+                unselectedParts[i] = in.readParcelable(MessagePartData.class.getClassLoader(),
+                        MessagePartData.class);
             }
         }
 
@@ -157,12 +158,12 @@ public class AttachmentGridView extends GridView implements
             }
         }
 
-        public static final Parcelable.Creator<SavedState> CREATOR =
-                new Parcelable.Creator<SavedState>() {
+        public static final Parcelable.Creator<SavedState> CREATOR = new Parcelable.Creator<>() {
             @Override
             public SavedState createFromParcel(final Parcel in) {
                 return new SavedState(in);
             }
+
             @Override
             public SavedState[] newArray(final int size) {
                 return new SavedState[size];

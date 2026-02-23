@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +17,6 @@
 
 package com.android.messaging.ui.photoviewer;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -40,7 +40,6 @@ import com.android.messaging.datamodel.MediaScratchFileProvider;
 import com.android.messaging.ui.conversation.ConversationFragment;
 import com.android.messaging.util.Dates;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 
 /**
  * Customizations for the photoviewer to display conversation images in full screen.
@@ -148,23 +147,18 @@ public class BuglePhotoViewController extends PhotoViewController {
     @Override
     public boolean onOptionsItemSelected(final MenuItem item) {
         if (item.getItemId() == R.id.action_save) {
-            if (OsUtil.hasStoragePermission()) {
-                final PhotoPagerAdapter adapter = getAdapter();
-                final Cursor cursor = getCursorAtProperPosition();
-                if (cursor == null) {
-                    final Context context = getActivity().getContext();
-                    final String error = context.getResources().getQuantityString(
-                            R.plurals.attachment_save_error, 1, 1);
-                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show();
-                    return true;
-                }
-                final String photoUri = adapter.getPhotoUri(cursor);
-                new ConversationFragment.SaveAttachmentTask(((Activity) getActivity()),
-                        Uri.parse(photoUri), adapter.getContentType(cursor)).executeOnThreadPool();
-            } else {
-                ((Activity)getActivity()).requestPermissions(
-                        new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, 0);
+            final PhotoPagerAdapter adapter = getAdapter();
+            final Cursor cursor = getCursorAtProperPosition();
+            if (cursor == null) {
+                final Context context = getActivity().getContext();
+                final String error = context.getResources().getQuantityString(
+                        R.plurals.attachment_save_error, 1, 1);
+                Toast.makeText(context, error, Toast.LENGTH_SHORT).show();
+                return true;
             }
+            final String photoUri = adapter.getPhotoUri(cursor);
+            new ConversationFragment.SaveAttachmentTask(((Activity) getActivity()),
+                    Uri.parse(photoUri), adapter.getContentType(cursor)).execute();
             return true;
         } else {
             return super.onOptionsItemSelected(item);

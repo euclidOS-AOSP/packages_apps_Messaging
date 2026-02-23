@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +17,6 @@
 
 package com.android.messaging.ui.conversationlist;
 
-import android.app.Fragment;
 import android.os.Bundle;
 
 import com.android.messaging.datamodel.data.ConversationListData;
@@ -25,7 +25,6 @@ import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.ui.BaseBugleActivity;
 import com.android.messaging.ui.UIIntents;
 import com.android.messaging.ui.conversationlist.ConversationListFragment.ConversationListFragmentHost;
-import com.android.messaging.util.Assert;
 
 /**
  * An activity that lets the user forward a SMS/MMS message by picking from a conversation in the
@@ -40,15 +39,9 @@ public class ForwardMessageActivity extends BaseBugleActivity
         super.onCreate(savedInstanceState);
         final ConversationListFragment fragment =
                 ConversationListFragment.createForwardMessageConversationListFragment();
-        getFragmentManager().beginTransaction().add(android.R.id.content, fragment).commit();
-        mDraftMessage = getIntent().getParcelableExtra(UIIntents.UI_INTENT_EXTRA_DRAFT_DATA);
-    }
-
-    @Override
-    public void onAttachFragment(final Fragment fragment) {
-        Assert.isTrue(fragment instanceof ConversationListFragment);
-        final ConversationListFragment clf = (ConversationListFragment) fragment;
-        clf.setHost(this);
+        getSupportFragmentManager().beginTransaction().add(android.R.id.content, fragment).commit();
+        mDraftMessage = getIntent().getParcelableExtra(UIIntents.UI_INTENT_EXTRA_DRAFT_DATA,
+                MessageData.class);
     }
 
     @Override

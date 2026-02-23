@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.app.Activity;
 import android.app.PendingIntent;
@@ -25,10 +26,10 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
-import androidx.appcompat.mms.pdu.GenericPdu;
-import androidx.appcompat.mms.pdu.PduHeaders;
-import androidx.appcompat.mms.pdu.PduParser;
-import androidx.appcompat.mms.pdu.SendConf;
+import android.support.v7.mms.pdu.GenericPdu;
+import android.support.v7.mms.pdu.PduHeaders;
+import android.support.v7.mms.pdu.PduParser;
+import android.support.v7.mms.pdu.SendConf;
 import android.telephony.SmsManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -97,23 +98,11 @@ abstract class MmsRequest implements Parcelable {
     // Thread pool for transferring PDU with MMS apps
     protected final ExecutorService mPduTransferExecutor = Executors.newCachedThreadPool();
 
-    // Whether this request should acquire wake lock
-    private boolean mUseWakeLock;
-
     protected MmsRequest(final String locationUrl, final Uri pduUri,
             final PendingIntent pendingIntent) {
         mLocationUrl = locationUrl;
         mPduUri = pduUri;
         mPendingIntent = pendingIntent;
-        mUseWakeLock = true;
-    }
-
-    void setUseWakeLock(final boolean useWakeLock) {
-        mUseWakeLock = useWakeLock;
-    }
-
-    boolean getUseWakeLock() {
-        return mUseWakeLock;
     }
 
     /**
@@ -375,7 +364,6 @@ abstract class MmsRequest implements Parcelable {
 
     @Override
     public void writeToParcel(Parcel parcel, int flags) {
-        parcel.writeByte((byte) (mUseWakeLock ? 1 : 0));
         parcel.writeString(mLocationUrl);
         parcel.writeParcelable(mPduUri, 0);
         parcel.writeParcelable(mPendingIntent, 0);
@@ -383,7 +371,6 @@ abstract class MmsRequest implements Parcelable {
 
     protected MmsRequest(final Parcel in) {
         final ClassLoader classLoader = MmsRequest.class.getClassLoader();
-        mUseWakeLock = in.readByte() != 0;
         mLocationUrl = in.readString();
         mPduUri = in.readParcelable(classLoader);
         mPendingIntent = in.readParcelable(classLoader);

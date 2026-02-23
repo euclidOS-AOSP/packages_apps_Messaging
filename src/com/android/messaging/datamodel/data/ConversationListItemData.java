@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,9 +53,6 @@ public class ConversationListItemData {
     private String mOtherParticipantNormalizedDestination;
     private String mSelfId;
     private int mParticipantCount;
-    private boolean mNotificationEnabled;
-    private String mNotificationSoundUri;
-    private boolean mNotificationVibrate;
     private boolean mIncludeEmailAddress;
     private int mMessageStatus;
     private int mMessageRawTelephonyStatus;
@@ -92,9 +90,6 @@ public class ConversationListItemData {
                 INDEX_OTHER_PARTICIPANT_NORMALIZED_DESTINATION);
         mSelfId = cursor.getString(INDEX_SELF_ID);
         mParticipantCount = cursor.getInt(INDEX_PARTICIPANT_COUNT);
-        mNotificationEnabled = cursor.getInt(INDEX_NOTIFICATION_ENABLED) == 1;
-        mNotificationSoundUri = cursor.getString(INDEX_NOTIFICATION_SOUND_URI);
-        mNotificationVibrate = cursor.getInt(INDEX_NOTIFICATION_VIBRATION) == 1;
         mIncludeEmailAddress = cursor.getInt(INDEX_INCLUDE_EMAIL_ADDRESS) == 1;
         mMessageStatus = cursor.getInt(INDEX_MESSAGE_STATUS);
         mMessageRawTelephonyStatus = cursor.getInt(INDEX_MESSAGE_RAW_TELEPHONY_STATUS);
@@ -199,18 +194,6 @@ public class ConversationListItemData {
         return mIncludeEmailAddress;
     }
 
-    public boolean getNotificationEnabled() {
-        return mNotificationEnabled;
-    }
-
-    public String getNotificationSoundUri() {
-        return mNotificationSoundUri;
-    }
-
-    public boolean getNotifiationVibrate() {
-        return mNotificationVibrate;
-    }
-
     public final boolean getIsFailedStatus() {
         return (mMessageStatus == MessageData.BUGLE_STATUS_OUTGOING_FAILED ||
                 mMessageStatus == MessageData.BUGLE_STATUS_OUTGOING_FAILED_EMERGENCY_NUMBER ||
@@ -279,11 +262,11 @@ public class ConversationListItemData {
     /**
      * Get the name of the view for this data item
      */
-    public static final String getConversationListView() {
+    public static String getConversationListView() {
         return CONVERSATION_LIST_VIEW;
     }
 
-    public static final String getConversationListViewSql() {
+    public static String getConversationListViewSql() {
         return CONVERSATION_LIST_VIEW_SQL;
     }
 
@@ -328,12 +311,6 @@ public class ConversationListItemData {
             + " as " + ConversationListViewColumns.PREVIEW_CONTENT_TYPE + ", "
             + DatabaseHelper.CONVERSATIONS_TABLE + '.' + ConversationColumns.PARTICIPANT_COUNT
             + " as " + ConversationListViewColumns.PARTICIPANT_COUNT + ", "
-            + DatabaseHelper.CONVERSATIONS_TABLE + '.' + ConversationColumns.NOTIFICATION_ENABLED
-            + " as " + ConversationListViewColumns.NOTIFICATION_ENABLED + ", "
-            + DatabaseHelper.CONVERSATIONS_TABLE + '.' + ConversationColumns.NOTIFICATION_SOUND_URI
-            + " as " + ConversationListViewColumns.NOTIFICATION_SOUND_URI + ", "
-            + DatabaseHelper.CONVERSATIONS_TABLE + '.' + ConversationColumns.NOTIFICATION_VIBRATION
-            + " as " + ConversationListViewColumns.NOTIFICATION_VIBRATION + ", "
             + DatabaseHelper.CONVERSATIONS_TABLE + '.' +
                     ConversationColumns.INCLUDE_EMAIL_ADDRESS
             + " as " + ConversationListViewColumns.INCLUDE_EMAIL_ADDRESS + ", "
@@ -396,9 +373,6 @@ public class ConversationListItemData {
                 ConversationColumns.OTHER_PARTICIPANT_NORMALIZED_DESTINATION;
         static final String CURRENT_SELF_ID = ConversationColumns.CURRENT_SELF_ID;
         static final String PARTICIPANT_COUNT = ConversationColumns.PARTICIPANT_COUNT;
-        static final String NOTIFICATION_ENABLED = ConversationColumns.NOTIFICATION_ENABLED;
-        static final String NOTIFICATION_SOUND_URI = ConversationColumns.NOTIFICATION_SOUND_URI;
-        static final String NOTIFICATION_VIBRATION = ConversationColumns.NOTIFICATION_VIBRATION;
         static final String INCLUDE_EMAIL_ADDRESS =
                 ConversationColumns.INCLUDE_EMAIL_ADDRESS;
         static final String MESSAGE_STATUS = MessageColumns.STATUS;
@@ -424,9 +398,6 @@ public class ConversationListItemData {
         ConversationListViewColumns.OTHER_PARTICIPANT_NORMALIZED_DESTINATION,
         ConversationListViewColumns.PARTICIPANT_COUNT,
         ConversationListViewColumns.CURRENT_SELF_ID,
-        ConversationListViewColumns.NOTIFICATION_ENABLED,
-        ConversationListViewColumns.NOTIFICATION_SOUND_URI,
-        ConversationListViewColumns.NOTIFICATION_VIBRATION,
         ConversationListViewColumns.INCLUDE_EMAIL_ADDRESS,
         ConversationListViewColumns.MESSAGE_STATUS,
         ConversationListViewColumns.SHOW_DRAFT,
@@ -456,23 +427,20 @@ public class ConversationListItemData {
     private static final int INDEX_OTHER_PARTICIPANT_NORMALIZED_DESTINATION = 10;
     private static final int INDEX_PARTICIPANT_COUNT = 11;
     private static final int INDEX_SELF_ID = 12;
-    private static final int INDEX_NOTIFICATION_ENABLED = 13;
-    private static final int INDEX_NOTIFICATION_SOUND_URI = 14;
-    private static final int INDEX_NOTIFICATION_VIBRATION = 15;
-    private static final int INDEX_INCLUDE_EMAIL_ADDRESS = 16;
-    private static final int INDEX_MESSAGE_STATUS = 17;
-    private static final int INDEX_SHOW_DRAFT = 18;
-    private static final int INDEX_DRAFT_PREVIEW_URI = 19;
-    private static final int INDEX_DRAFT_PREVIEW_CONTENT_TYPE = 20;
-    private static final int INDEX_DRAFT_SNIPPET_TEXT = 21;
-    private static final int INDEX_ARCHIVE_STATUS = 22;
-    private static final int INDEX_MESSAGE_ID = 23;
-    private static final int INDEX_SUBJECT_TEXT = 24;
-    private static final int INDEX_DRAFT_SUBJECT_TEXT = 25;
-    private static final int INDEX_MESSAGE_RAW_TELEPHONY_STATUS = 26;
-    private static final int INDEX_SNIPPET_SENDER_FIRST_NAME = 27;
-    private static final int INDEX_SNIPPET_SENDER_DISPLAY_DESTINATION = 28;
-    private static final int INDEX_IS_ENTERPRISE = 29;
+    private static final int INDEX_INCLUDE_EMAIL_ADDRESS = 13;
+    private static final int INDEX_MESSAGE_STATUS = 14;
+    private static final int INDEX_SHOW_DRAFT = 15;
+    private static final int INDEX_DRAFT_PREVIEW_URI = 16;
+    private static final int INDEX_DRAFT_PREVIEW_CONTENT_TYPE = 17;
+    private static final int INDEX_DRAFT_SNIPPET_TEXT = 18;
+    private static final int INDEX_ARCHIVE_STATUS = 19;
+    private static final int INDEX_MESSAGE_ID = 20;
+    private static final int INDEX_SUBJECT_TEXT = 21;
+    private static final int INDEX_DRAFT_SUBJECT_TEXT = 22;
+    private static final int INDEX_MESSAGE_RAW_TELEPHONY_STATUS = 23;
+    private static final int INDEX_SNIPPET_SENDER_FIRST_NAME = 24;
+    private static final int INDEX_SNIPPET_SENDER_DISPLAY_DESTINATION = 25;
+    private static final int INDEX_IS_ENTERPRISE = 26;
 
     private static final String DIVIDER_TEXT = ", ";
 
@@ -498,22 +466,16 @@ public class ConversationListItemData {
         ConversationListItemData conversation = null;
 
         // Look for an existing conversation in the db with this conversation id
-        Cursor cursor = null;
-        try {
+        try (Cursor cursor = dbWrapper.query(getConversationListView(),
+                PROJECTION,
+                ConversationColumns._ID + "=?",
+                new String[]{conversationId},
+                null, null, null)) {
             // TODO: Should we be able to read a row from just the conversation table?
-            cursor = dbWrapper.query(getConversationListView(),
-                    PROJECTION,
-                    ConversationColumns._ID + "=?",
-                    new String[] { conversationId },
-                    null, null, null);
             Assert.inRange(cursor.getCount(), 0, 1);
             if (cursor.moveToFirst()) {
                 conversation = new ConversationListItemData();
                 conversation.bind(cursor);
-            }
-        } finally {
-            if (cursor != null) {
-                cursor.close();
             }
         }
 
@@ -527,7 +489,7 @@ public class ConversationListItemData {
             return participants.get(0).getDisplayName(true);
         }
 
-        final ArrayList<String> participantNames = new ArrayList<String>();
+        final ArrayList<String> participantNames = new ArrayList<>();
         for (final ParticipantData participant : participants) {
             // Prefer first name over full name for group conversation
             participantNames.add(participant.getDisplayName(false));

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +16,12 @@
  */
 package com.android.messaging.ui.conversation;
 
-import android.app.FragmentManager;
 import android.content.Context;
 import android.os.Bundle;
-import androidx.appcompat.app.ActionBar;
 import android.widget.EditText;
+
+import androidx.appcompat.app.ActionBar;
+import androidx.fragment.app.FragmentManager;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.binding.BindingBase;
@@ -38,7 +40,6 @@ import com.android.messaging.ui.mediapicker.MediaPicker.MediaPickerListener;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.ImeUtil;
 import com.android.messaging.util.ImeUtil.ImeStateHost;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.Collection;
 
@@ -61,7 +62,6 @@ public class ConversationInputManager implements ConversationInput.ConversationI
         void onStartComposeMessage();
         SimSelectorView getSimSelectorView();
         MediaPicker createMediaPicker();
-        void showHideSimSelector(boolean show);
         int getSimSelectorItemLayoutId();
     }
 
@@ -176,8 +176,8 @@ public class ConversationInputManager implements ConversationInput.ConversationI
     }
 
     public boolean onNavigationUpPressed() {
-        for (int i = 0; i < mInputs.length; i++) {
-            if (mInputs[i].onNavigationUpPressed()) {
+        for (ConversationInput input : mInputs) {
+            if (input.onNavigationUpPressed()) {
                 return true;
             }
         }
@@ -208,16 +208,14 @@ public class ConversationInputManager implements ConversationInput.ConversationI
 
     public void hideAllInputs(final boolean animate) {
         beginUpdate();
-        for (int i = 0; i < mInputs.length; i++) {
-            showHideInternal(mInputs[i], false, animate);
+        for (ConversationInput input : mInputs) {
+            showHideInternal(input, false, animate);
         }
         endUpdate();
     }
 
     /**
      * Toggle the visibility of the sim selector.
-     * @param animate
-     * @param subEntry
      * @return true if the view is now shown, false if it now hidden
      */
     public boolean toggleSimSelector(final boolean animate, final SubscriptionListEntry subEntry) {
@@ -226,32 +224,12 @@ public class ConversationInputManager implements ConversationInput.ConversationI
     }
 
     public boolean updateActionBar(final ActionBar actionBar) {
-        for (int i = 0; i < mInputs.length; i++) {
-            if (mInputs[i].mShowing) {
-                return mInputs[i].updateActionBar(actionBar);
+        for (ConversationInput input : mInputs) {
+            if (input.mShowing) {
+                return input.updateActionBar(actionBar);
             }
         }
         return false;
-    }
-
-    @VisibleForTesting
-    boolean isMediaPickerVisible() {
-        return mMediaInput.mShowing;
-    }
-
-    @VisibleForTesting
-    boolean isSimSelectorVisible() {
-        return mSimInput.mShowing;
-    }
-
-    @VisibleForTesting
-    boolean isImeKeyboardVisible() {
-        return mImeInput.mShowing;
-    }
-
-    @VisibleForTesting
-    void testNotifyImeStateChanged(final boolean imeOpen) {
-        mImeStateObserver.onImeStateChanged(imeOpen);
     }
 
     /**
@@ -292,8 +270,7 @@ public class ConversationInputManager implements ConversationInput.ConversationI
         // All inputs are mutually exclusive. Showing one will hide everything else.
         // The one exception, is that the keyboard and location media chooser can be open at the
         // time to enable searching within that chooser
-        for (int i = 0; i < mInputs.length; i++) {
-            final ConversationInput currInput = mInputs[i];
+        for (final ConversationInput currInput : mInputs) {
             if (currInput != target) {
                 // TODO : If there's more exceptions we will want to make this more
                 // generic
@@ -515,15 +492,12 @@ public class ConversationInputManager implements ConversationInput.ConversationI
         @Override
         public boolean show(boolean animate) {
             final boolean result = super.show(animate);
-            mHost.showHideSimSelector(true /*show*/);
             return result;
         }
 
         @Override
         public boolean hide(boolean animate) {
-            final boolean result = super.hide(animate);
-            mHost.showHideSimSelector(false /*show*/);
-            return result;
+            return super.hide(animate);
         }
     }
 

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +23,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.support.v7.mms.pdu.SendConf;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsManager;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.BugleDatabaseOperations;
@@ -34,7 +38,6 @@ import com.android.messaging.datamodel.MmsFileProvider;
 import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.data.MessagePartData;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.mmslib.pdu.SendConf;
 import com.android.messaging.sms.MmsConfig;
 import com.android.messaging.sms.MmsSender;
 import com.android.messaging.sms.MmsUtils;
@@ -83,13 +86,13 @@ public class ProcessSentMessageAction extends Action {
         params.putString(KEY_MESSAGE_ID, extras.getString(SendMessageAction.EXTRA_MESSAGE_ID));
         params.putParcelable(KEY_MESSAGE_URI, messageUri);
         params.putParcelable(KEY_UPDATED_MESSAGE_URI,
-                extras.getParcelable(SendMessageAction.EXTRA_UPDATED_MESSAGE_URI));
+                extras.getParcelable(SendMessageAction.EXTRA_UPDATED_MESSAGE_URI, Uri.class));
         params.putInt(KEY_SUB_ID,
                 extras.getInt(SendMessageAction.KEY_SUB_ID, ParticipantData.DEFAULT_SELF_SUB_ID));
         params.putInt(KEY_RESULT_CODE, resultCode);
         params.putInt(KEY_HTTP_STATUS_CODE, extras.getInt(SmsManager.EXTRA_MMS_HTTP_STATUS, 0));
         params.putParcelable(KEY_CONTENT_URI,
-                extras.getParcelable(SendMessageAction.EXTRA_CONTENT_URI));
+                extras.getParcelable(SendMessageAction.EXTRA_CONTENT_URI, Uri.class));
         params.putByteArray(KEY_RESPONSE, extras.getByteArray(SmsManager.EXTRA_MMS_DATA));
         params.putBoolean(KEY_RESPONSE_IMPORTANT,
                 extras.getBoolean(SendMessageAction.EXTRA_RESPONSE_IMPORTANT));
@@ -125,8 +128,9 @@ public class ProcessSentMessageAction extends Action {
     protected Object executeAction() {
         final Context context = Factory.get().getApplicationContext();
         final String messageId = actionParameters.getString(KEY_MESSAGE_ID);
-        final Uri messageUri = actionParameters.getParcelable(KEY_MESSAGE_URI);
-        final Uri updatedMessageUri = actionParameters.getParcelable(KEY_UPDATED_MESSAGE_URI);
+        final Uri messageUri = actionParameters.getParcelable(KEY_MESSAGE_URI, Uri.class);
+        final Uri updatedMessageUri = actionParameters.getParcelable(KEY_UPDATED_MESSAGE_URI,
+                Uri.class);
         final boolean isSms = actionParameters.getBoolean(KEY_SMS);
         final boolean sentByPlatform = actionParameters.getBoolean(KEY_SENT_BY_PLATFORM);
 
@@ -137,17 +141,15 @@ public class ProcessSentMessageAction extends Action {
 
         if (sentByPlatform) {
             // Delete temporary file backing the contentUri passed to MMS service
-            final Uri contentUri = actionParameters.getParcelable(KEY_CONTENT_URI);
+            final Uri contentUri = actionParameters.getParcelable(KEY_CONTENT_URI, Uri.class);
             Assert.isTrue(contentUri != null);
             final File tempFile = MmsFileProvider.getFile(contentUri);
             long messageSize = 0;
             if (tempFile.exists()) {
                 messageSize = tempFile.length();
                 tempFile.delete();
-                if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                    LogUtil.v(TAG, "ProcessSentMessageAction: Deleted temp file with outgoing "
-                            + "MMS pdu: " + contentUri);
-                }
+                LogUtil.v(TAG, "ProcessSentMessageAction: Deleted temp file with outgoing "
+                        + "MMS pdu: " + contentUri);
             }
 
             final int resultCode = actionParameters.getInt(KEY_RESULT_CODE);
@@ -190,10 +192,8 @@ public class ProcessSentMessageAction extends Action {
                     messageId, updatedMessageUri, status, rawStatus, isSms, this, subId,
                     resultCode, httpStatusCode);
         } else {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "ProcessSentMessageAction: No sent message to process (it was "
-                        + "probably a notify response for an MMS download)");
-            }
+            LogUtil.v(TAG, "ProcessSentMessageAction: No sent message to process (it was "
+                    + "probably a notify response for an MMS download)");
         }
         return null;
     }
@@ -293,7 +293,7 @@ public class ProcessSentMessageAction extends Action {
     }
 
     public static final Parcelable.Creator<ProcessSentMessageAction> CREATOR
-            = new Parcelable.Creator<ProcessSentMessageAction>() {
+            = new Parcelable.Creator<>() {
         @Override
         public ProcessSentMessageAction createFromParcel(final Parcel in) {
             return new ProcessSentMessageAction(in);
@@ -306,7 +306,7 @@ public class ProcessSentMessageAction extends Action {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,14 +47,14 @@ public abstract class NotificationState {
     private static final int NUM_REQUEST_CODES_NEEDED = 2;
 
     public interface FailedMessageQuery {
-        static final String FAILED_MESSAGES_WHERE_CLAUSE =
+        String FAILED_MESSAGES_WHERE_CLAUSE =
                 "((" + MessageColumns.STATUS + " = " +
                 MessageData.BUGLE_STATUS_OUTGOING_FAILED + " OR " +
                 MessageColumns.STATUS + " = " +
                 MessageData.BUGLE_STATUS_INCOMING_DOWNLOAD_FAILED + ") AND " +
                 DatabaseHelper.MessageColumns.SEEN + " = 0)";
 
-        static final String FAILED_ORDER_BY = DatabaseHelper.MessageColumns.CONVERSATION_ID + ", " +
+        String FAILED_ORDER_BY = DatabaseHelper.MessageColumns.CONVERSATION_ID + ", " +
                 DatabaseHelper.MessageColumns.SENT_TIMESTAMP + " asc";
     }
 
@@ -70,7 +71,7 @@ public abstract class NotificationState {
 
     NotificationState(final ConversationIdSet conversationIds) {
         mConversationIds = conversationIds;
-        mPeople = new HashSet<String>();
+        mPeople = new HashSet<>();
     }
 
     /**
@@ -89,16 +90,9 @@ public abstract class NotificationState {
 
     /**
      * Build the notification using the given builder.
-     * @param builder
      * @return The style of the notification.
      */
     protected abstract NotificationCompat.Style build(NotificationCompat.Builder builder);
-
-    protected void setAvatarUrlsForConversation(final String conversationId) {
-    }
-
-    protected void setPeopleForConversation(final String conversationId) {
-    }
 
     /**
      * Reserves request codes for this notification type. By default 2 codes are reserved, one for
@@ -106,10 +100,6 @@ public abstract class NotificationState {
      */
     public int getNumRequestCodesNeeded() {
         return NUM_REQUEST_CODES_NEEDED;
-    }
-
-    public int getContentIntentRequestCode() {
-        return mBaseRequestCode + CONTENT_INTENT_REQUEST_CODE_OFFSET;
     }
 
     public int getClearIntentRequestCode() {
@@ -122,26 +112,9 @@ public abstract class NotificationState {
     public abstract int getIcon();
 
     /**
-     * @return the type of notification that should be used from {@link RealTimeChatNotifications}
-     * so that the proper ringtone and vibrate settings can be used.
-     */
-    public int getLatestMessageNotificationType() {
-        return BugleNotifications.LOCAL_SMS_NOTIFICATION;
-    }
-
-    /**
      * @return the notification priority level for this notification.
      */
     public abstract int getPriority();
-
-    /** @return custom ringtone URI or null if not set */
-    public String getRingtoneUri() {
-        return null;
-    }
-
-    public boolean getNotificationVibrate() {
-        return false;
-    }
 
     public long getLatestReceivedTimestamp() {
         return Long.MIN_VALUE;

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,9 +67,7 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
         mAppWidgetId = intent.getIntExtra(
                 AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
         mAppWidgetManager = AppWidgetManager.getInstance(context);
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "BaseWidgetFactory intent: " + intent + "widget id: " + mAppWidgetId);
-        }
+        LogUtil.v(TAG, "BaseWidgetFactory intent: " + intent + "widget id: " + mAppWidgetId);
         mIconSize = (int) context.getResources()
                 .getDimension(R.dimen.contact_icon_view_normal_size);
 
@@ -76,16 +75,12 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
 
     @Override
     public void onCreate() {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "onCreate");
-        }
+        LogUtil.v(TAG, "onCreate");
     }
 
     @Override
     public void onDestroy() {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "onDestroy");
-        }
+        LogUtil.v(TAG, "onDestroy");
         synchronized (sWidgetLock) {
             if (mCursor != null && !mCursor.isClosed()) {
                 mCursor.close();
@@ -96,9 +91,7 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
 
     @Override
     public void onDataSetChanged() {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "onDataSetChanged");
-        }
+        LogUtil.v(TAG, "onDataSetChanged");
         synchronized (sWidgetLock) {
             if (mCursor != null) {
                 mCursor.close();
@@ -125,15 +118,11 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
     public int getCount() {
         synchronized (sWidgetLock) {
             if (mCursor == null) {
-                if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                    LogUtil.v(TAG, "getCount: 0");
-                }
+                LogUtil.v(TAG, "getCount: 0");
                 return 0;
             }
             final int count = getItemCount();
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "getCount: " + count);
-            }
+            LogUtil.v(TAG, "getCount: " + count);
             mShouldShowViewMore = count < mCursor.getCount();
             return count + (mShouldShowViewMore ? 1 : 0);
         }
@@ -143,12 +132,9 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
      * Returns the number of messages that should be shown in the widget.  This method
      * doesn't update the boolean that indicates whether the "show more" item should be included
      * in the list.
-     * @return
      */
     protected int getItemCount() {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "getItemCount: " + mCursor.getCount());
-        }
+        LogUtil.v(TAG, "getItemCount: " + mCursor.getCount());
         return Math.min(mCursor.getCount(), MAX_ITEMS_TO_SHOW);
     }
 
@@ -205,9 +191,7 @@ abstract class BaseWidgetFactory implements RemoteViewsService.RemoteViewsFactor
     }
 
     private void onLoadComplete() {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "onLoadComplete");
-        }
+        LogUtil.v(TAG, "onLoadComplete");
         final RemoteViews remoteViews = new RemoteViews(mContext.getPackageName(),
                 getMainLayoutId());
         mAppWidgetManager.partiallyUpdateAppWidget(mAppWidgetId, remoteViews);

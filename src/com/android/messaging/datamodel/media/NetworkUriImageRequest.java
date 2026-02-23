@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +19,10 @@ package com.android.messaging.datamodel.media;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.support.v7.mms.pdu.ContentType;
 
 import com.android.messaging.Factory;
 import com.android.messaging.util.Assert;
-import com.android.messaging.util.ContentType;
 import com.android.messaging.util.LogUtil;
 
 import java.io.FileNotFoundException;
@@ -39,7 +40,7 @@ public class NetworkUriImageRequest<D extends UriImageRequestDescriptor> extends
 
     public NetworkUriImageRequest(Context context, D descriptor) {
         super(context, descriptor);
-        mOrientation = android.media.ExifInterface.ORIENTATION_UNDEFINED;
+        mOrientation = androidx.exifinterface.media.ExifInterface.ORIENTATION_UNDEFINED;
     }
 
     @Override
@@ -65,11 +66,11 @@ public class NetworkUriImageRequest<D extends UriImageRequestDescriptor> extends
         } catch (MalformedURLException e) {
             LogUtil.e(LogUtil.BUGLE_TAG,
                     "MalformedUrl for image with url: "
-                            + mDescriptor.uri.toString(), e);
+                            + mDescriptor.uri, e);
         } catch (IOException e) {
             LogUtil.e(LogUtil.BUGLE_TAG,
                     "IOException trying to get inputStream for image with url: "
-                            + mDescriptor.uri.toString(), e);
+                            + mDescriptor.uri, e);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -78,12 +79,10 @@ public class NetworkUriImageRequest<D extends UriImageRequestDescriptor> extends
         return false;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
-    public Bitmap loadBitmapInternal() throws IOException {
+    public Bitmap loadBitmapInternal() {
         Assert.isNotMainThread();
 
-        InputStream inputStream = null;
         Bitmap bitmap = null;
         HttpURLConnection connection = null;
         try {
@@ -97,20 +96,17 @@ public class NetworkUriImageRequest<D extends UriImageRequestDescriptor> extends
         } catch (MalformedURLException e) {
             LogUtil.e(LogUtil.BUGLE_TAG,
                     "MalformedUrl for image with url: "
-                            + mDescriptor.uri.toString(), e);
+                            + mDescriptor.uri, e);
         } catch (final OutOfMemoryError e) {
             LogUtil.e(LogUtil.BUGLE_TAG,
                     "OutOfMemoryError for image with url: "
-                            + mDescriptor.uri.toString(), e);
+                            + mDescriptor.uri, e);
             Factory.get().reclaimMemory();
         } catch (IOException e) {
             LogUtil.e(LogUtil.BUGLE_TAG,
                     "IOException trying to get inputStream for image with url: "
-                            + mDescriptor.uri.toString(), e);
+                            + mDescriptor.uri, e);
         } finally {
-            if (inputStream != null) {
-                inputStream.close();
-            }
             if (connection != null) {
                 connection.disconnect();
             }

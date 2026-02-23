@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007 Esmertec AG.
  * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +16,12 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms.pdu;
+package android.support.v7.mms.pdu;
+
+import android.util.SparseArray;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 
 public class PduHeaders {
     /**
@@ -320,13 +323,13 @@ public class PduHeaders {
     /**
      * The map contains the value of all headers.
      */
-    private HashMap<Integer, Object> mHeaderMap = null;
+    private SparseArray<Object> mHeaderMap;
 
     /**
      * Constructor of PduHeaders.
      */
     public PduHeaders() {
-        mHeaderMap = new HashMap<Integer, Object>();
+        mHeaderMap = new SparseArray<>();
     }
 
     /**
@@ -334,10 +337,10 @@ public class PduHeaders {
      *
      * @param field the field
      * @return the octet value of the pdu header
-     *          with specified header field. Return 0 if
-     *          the value is not set.
+     * with specified header field. Return 0 if
+     * the value is not set.
      */
-    protected int getOctet(int field) {
+    public int getOctet(int field) {
         Integer octet = (Integer) mHeaderMap.get(field);
         if (null == octet) {
             return 0;
@@ -353,8 +356,8 @@ public class PduHeaders {
      * @param field the field
      * @throws InvalidHeaderValueException if the value is invalid.
      */
-    protected void setOctet(int value, int field)
-            throws InvalidHeaderValueException{
+    public void setOctet(int value, int field)
+            throws InvalidHeaderValueException {
         /**
          * Check whether this field can be set for specific
          * header and check validity of the field.
@@ -497,7 +500,7 @@ public class PduHeaders {
      * @return the TextString value of the pdu header
      *          with specified header field
      */
-    protected byte[] getTextString(int field) {
+    public byte[] getTextString(int field) {
         return (byte[]) mHeaderMap.get(field);
     }
 
@@ -506,11 +509,9 @@ public class PduHeaders {
      *
      * @param value the value
      * @param field the field
-     * @return the TextString value of the pdu header
-     *          with specified header field
      * @throws NullPointerException if the value is null.
      */
-    protected void setTextString(byte[] value, int field) {
+    public void setTextString(byte[] value, int field) {
         /**
          * Check whether this field can be set for specific
          * header and check validity of the field.
@@ -546,7 +547,7 @@ public class PduHeaders {
      * @return the EncodedStringValue value of the pdu header
      *          with specified header field
      */
-    protected EncodedStringValue getEncodedStringValue(int field) {
+    public EncodedStringValue getEncodedStringValue(int field) {
         return (EncodedStringValue) mHeaderMap.get(field);
     }
 
@@ -557,7 +558,7 @@ public class PduHeaders {
      * @return the EncodeStringValue array of the pdu header
      *          with specified header field
      */
-    protected EncodedStringValue[] getEncodedStringValues(int field) {
+    public EncodedStringValue[] getEncodedStringValues(int field) {
         ArrayList<EncodedStringValue> list =
                 (ArrayList<EncodedStringValue>) mHeaderMap.get(field);
         if (null == list) {
@@ -572,11 +573,9 @@ public class PduHeaders {
      *
      * @param value the value
      * @param field the field
-     * @return the EncodedStringValue value of the pdu header
-     *          with specified header field
      * @throws NullPointerException if the value is null.
      */
-    protected void setEncodedStringValue(EncodedStringValue value, int field) {
+    public void setEncodedStringValue(EncodedStringValue value, int field) {
         /**
          * Check whether this field can be set for specific
          * header and check validity of the field.
@@ -609,8 +608,6 @@ public class PduHeaders {
      *
      * @param value the value
      * @param field the field
-     * @return the EncodedStringValue value array of the pdu header
-     *          with specified header field
      * @throws NullPointerException if the value is null.
      */
     protected void setEncodedStringValues(EncodedStringValue[] value, int field) {
@@ -632,10 +629,8 @@ public class PduHeaders {
                 throw new RuntimeException("Invalid header field!");
         }
 
-        ArrayList<EncodedStringValue> list = new ArrayList<EncodedStringValue>();
-        for (int i = 0; i < value.length; i++) {
-            list.add(value[i]);
-        }
+        ArrayList<EncodedStringValue> list = new ArrayList<>();
+        Collections.addAll(list, value);
         mHeaderMap.put(field, list);
     }
 
@@ -646,8 +641,7 @@ public class PduHeaders {
      * @param field the field
      * @throws NullPointerException if the value is null.
      */
-    protected void appendEncodedStringValue(EncodedStringValue value,
-                                    int field) {
+    public void appendEncodedStringValue(EncodedStringValue value, int field) {
         if (null == value) {
             throw new NullPointerException();
         }
@@ -664,7 +658,7 @@ public class PduHeaders {
         ArrayList<EncodedStringValue> list =
             (ArrayList<EncodedStringValue>) mHeaderMap.get(field);
         if (null == list) {
-            list  = new ArrayList<EncodedStringValue>();
+            list  = new ArrayList<>();
         }
         list.add(value);
         mHeaderMap.put(field, list);
@@ -678,7 +672,7 @@ public class PduHeaders {
      *          with specified header field. if return -1, the
      *          field is not existed in pdu header.
      */
-    protected long getLongInteger(int field) {
+    public long getLongInteger(int field) {
         Long longInteger = (Long) mHeaderMap.get(field);
         if (null == longInteger) {
             return -1;
@@ -693,7 +687,7 @@ public class PduHeaders {
      * @param value the value
      * @param field the field
      */
-    protected void setLongInteger(long value, int field) {
+    public void setLongInteger(long value, int field) {
         /**
          * Check whether this field can be set for specific
          * header and check validity of the field.
@@ -715,5 +709,9 @@ public class PduHeaders {
                 throw new RuntimeException("Invalid header field!");
         }
         mHeaderMap.put(field, value);
+    }
+
+    public boolean hasHeader(int field) {
+        return mHeaderMap.get(field, null) != null;
     }
 }

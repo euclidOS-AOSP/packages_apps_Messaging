@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,18 +21,19 @@ import android.content.Context;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.support.v7.mms.pdu.PduHeaders;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.BugleDatabaseOperations;
 import com.android.messaging.datamodel.BugleNotifications;
 import com.android.messaging.datamodel.DataModel;
-import com.android.messaging.datamodel.DataModelException;
 import com.android.messaging.datamodel.DatabaseWrapper;
 import com.android.messaging.datamodel.MessagingContentProvider;
 import com.android.messaging.datamodel.SyncManager;
 import com.android.messaging.datamodel.data.MessageData;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.mmslib.pdu.PduHeaders;
 import com.android.messaging.sms.DatabaseMessages;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.util.LogUtil;
@@ -158,7 +160,7 @@ public class ReceiveMmsMessageAction extends Action implements Parcelable {
     }
 
     @Override
-    protected Bundle doBackgroundWork() throws DataModelException {
+    protected Bundle doBackgroundWork() {
         final Context context = Factory.get().getApplicationContext();
         final int subId = actionParameters.getInt(KEY_SUB_ID, ParticipantData.DEFAULT_SELF_SUB_ID);
         final String transactionId = actionParameters.getString(KEY_TRANSACTION_ID);
@@ -178,7 +180,7 @@ public class ReceiveMmsMessageAction extends Action implements Parcelable {
     }
 
     public static final Parcelable.Creator<ReceiveMmsMessageAction> CREATOR
-            = new Parcelable.Creator<ReceiveMmsMessageAction>() {
+            = new Parcelable.Creator<>() {
         @Override
         public ReceiveMmsMessageAction createFromParcel(final Parcel in) {
             return new ReceiveMmsMessageAction(in);
@@ -191,7 +193,7 @@ public class ReceiveMmsMessageAction extends Action implements Parcelable {
     };
 
     @Override
-    public void writeToParcel(final Parcel parcel, final int flags) {
+    public void writeToParcel(@NonNull final Parcel parcel, final int flags) {
         writeActionToParcel(parcel, flags);
     }
 }

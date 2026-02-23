@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +18,12 @@ package com.android.messaging.ui.conversationsettings;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.Fragment;
+import android.app.NotificationManager;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.database.Cursor;
-import android.media.RingtoneManager;
 import android.os.Bundle;
-import android.os.Parcelable;
 import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -34,6 +32,10 @@ import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
+import androidx.loader.app.LoaderManager;
 
 import com.android.messaging.R;
 import com.android.messaging.datamodel.DataModel;
@@ -47,9 +49,9 @@ import com.android.messaging.datamodel.data.PeopleOptionsItemData;
 import com.android.messaging.datamodel.data.PersonItemData;
 import com.android.messaging.ui.CompositeAdapter;
 import com.android.messaging.ui.PersonItemView;
-import com.android.messaging.ui.UIIntents;
 import com.android.messaging.ui.conversation.ConversationActivity;
 import com.android.messaging.util.Assert;
+import com.android.messaging.util.NotificationsUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,22 +64,21 @@ public class PeopleAndOptionsFragment extends Fragment
     private ListView mListView;
     private OptionsListAdapter mOptionsListAdapter;
     private PeopleListAdapter mPeopleListAdapter;
+    private List<ParticipantData> mOtherParticipants;
     private final Binding<PeopleAndOptionsData> mBinding =
             BindingBase.createBinding(this);
-
-    private static final int REQUEST_CODE_RINGTONE_PICKER = 1000;
 
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mBinding.getData().init(getLoaderManager(), mBinding);
+        mBinding.getData().init(LoaderManager.getInstance(this), mBinding);
     }
 
     @Override
     public View onCreateView(final LayoutInflater inflater, final ViewGroup container,
             final Bundle savedInstanceState) {
         final View view = inflater.inflate(R.layout.people_and_options_fragment, container, false);
-        mListView = (ListView) view.findViewById(android.R.id.list);
+        mListView = view.findViewById(android.R.id.list);
         mPeopleListAdapter = new PeopleListAdapter(getActivity());
         mOptionsListAdapter = new OptionsListAdapter();
         final CompositeAdapter compositeAdapter = new CompositeAdapter(getActivity());
@@ -87,17 +88,6 @@ public class PeopleAndOptionsFragment extends Fragment
                 R.string.participant_list_title, true));
         mListView.setAdapter(compositeAdapter);
         return view;
-    }
-
-    @Override
-    public void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == Activity.RESULT_OK && requestCode == REQUEST_CODE_RINGTONE_PICKER) {
-            final Parcelable pick = data.getParcelableExtra(
-                    RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
-            final String pickedUri = pick == null ? "" : pick.toString();
-            mBinding.getData().setConversationNotificationSound(mBinding, pickedUri);
-        }
     }
 
     @Override
@@ -125,56 +115,49 @@ public class PeopleAndOptionsFragment extends Fragment
             final List<ParticipantData> participants) {
         mBinding.ensureBound(data);
         mPeopleListAdapter.updateParticipants(participants);
+        mOtherParticipants = participants;
         final ParticipantData otherParticipant = participants.size() == 1 ?
                 participants.get(0) : null;
         mOptionsListAdapter.setOtherParticipant(otherParticipant);
     }
 
     @Override
-    public void onOptionsItemViewClicked(final PeopleOptionsItemData item,
-            final boolean isChecked) {
-        switch (item.getItemId()) {
-            case PeopleOptionsItemData.SETTING_NOTIFICATION_ENABLED:
-                mBinding.getData().enableConversationNotifications(mBinding, isChecked);
-                break;
-
-            case PeopleOptionsItemData.SETTING_NOTIFICATION_SOUND_URI:
-                final Intent ringtonePickerIntent = UIIntents.get().getRingtonePickerIntent(
-                        getString(R.string.notification_sound_pref_title),
-                        item.getRingtoneUri(), Settings.System.DEFAULT_NOTIFICATION_URI,
-                        RingtoneManager.TYPE_NOTIFICATION);
-                startActivityForResult(ringtonePickerIntent, REQUEST_CODE_RINGTONE_PICKER);
-                break;
-
-            case PeopleOptionsItemData.SETTING_NOTIFICATION_VIBRATION:
-                mBinding.getData().enableConversationNotificationVibration(mBinding,
-                        isChecked);
-                break;
-
-            case PeopleOptionsItemData.SETTING_BLOCKED:
-                if (item.getOtherParticipant().isBlocked()) {
-                    mBinding.getData().setDestinationBlocked(mBinding, false);
-                    break;
-                }
-                final Resources res = getResources();
-                final Activity activity = getActivity();
-                new AlertDialog.Builder(activity)
-                        .setTitle(res.getString(R.string.block_confirmation_title,
-                                item.getOtherParticipant().getDisplayDestination()))
-                        .setMessage(res.getString(R.string.block_confirmation_message))
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .setPositiveButton(android.R.string.ok,
-                                new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface arg0, int arg1) {
-                                mBinding.getData().setDestinationBlocked(mBinding, true);
-                                activity.setResult(ConversationActivity.FINISH_RESULT_CODE);
-                                activity.finish();
-                            }
-                        })
-                        .create()
-                        .show();
-                break;
+    public void onOptionsItemViewClicked(final PeopleOptionsItemData item) {
+        if (item.getItemId() == PeopleOptionsItemData.SETTING_NOTIFICATION) {
+            ArrayList<String> participantsNames = new ArrayList<>();
+            for (ParticipantData participant : mOtherParticipants) {
+                participantsNames.add(participant.getDisplayName(true));
+            }
+            NotificationsUtil.createNotificationChannelGroup(getActivity(),
+                    NotificationsUtil.CONVERSATION_GROUP_NAME,
+                    R.string.notification_channel_messages_title);
+            NotificationsUtil.createNotificationChannel(getActivity(),
+                    mBinding.getData().getConversationId(),
+                    String.join(", ", participantsNames),
+                    NotificationManager.IMPORTANCE_HIGH,
+                    NotificationsUtil.CONVERSATION_GROUP_NAME);
+            Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            intent.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+            startActivity(intent);
+        } else if (item.getItemId() == PeopleOptionsItemData.SETTING_BLOCKED) {
+            if (item.getOtherParticipant().isBlocked()) {
+                mBinding.getData().setDestinationBlocked(mBinding, false);
+                return;
+            }
+            final Resources res = getResources();
+            final Activity activity = getActivity();
+            new AlertDialog.Builder(activity, R.style.AlertDialogTheme)
+                    .setTitle(res.getString(R.string.block_confirmation_title,
+                            item.getOtherParticipant().getDisplayDestination()))
+                    .setMessage(res.getString(R.string.block_confirmation_message))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(android.R.string.ok, (arg0, arg1) -> {
+                        mBinding.getData().setDestinationBlocked(mBinding, true);
+                        activity.setResult(ConversationActivity.FINISH_RESULT_CODE);
+                        activity.finish();
+                    })
+                    .create()
+                    .show();
         }
     }
 
@@ -247,7 +230,7 @@ public class PeopleAndOptionsFragment extends Fragment
      */
     private class PeopleListAdapter extends ArrayAdapter<ParticipantData> {
         public PeopleListAdapter(final Context context) {
-            super(context, R.layout.people_list_item_view, new ArrayList<ParticipantData>());
+            super(context, R.layout.people_list_item_view, new ArrayList<>());
         }
 
         public void updateParticipants(final List<ParticipantData> newList) {
@@ -256,8 +239,10 @@ public class PeopleAndOptionsFragment extends Fragment
             notifyDataSetChanged();
         }
 
+        @NonNull
         @Override
-        public View getView(final int position, final View convertView, final ViewGroup parent) {
+        public View getView(final int position, final View convertView,
+                            @NonNull final ViewGroup parent) {
             PersonItemView itemView;
             final ParticipantData item = getItem(position);
             if (convertView != null && convertView instanceof PersonItemView) {
@@ -312,14 +297,14 @@ public class PeopleAndOptionsFragment extends Fragment
 
         @Override
         public View getHeaderView(final View convertView, final ViewGroup parentView) {
-            View view = null;
+            View view;
             if (convertView != null && convertView.getId() == R.id.people_and_options_header) {
                 view = convertView;
             } else {
                 view = LayoutInflater.from(getActivity()).inflate(
                         R.layout.people_and_options_section_header, parentView, false);
             }
-            final TextView text = (TextView) view.findViewById(R.id.header_text);
+            final TextView text = view.findViewById(R.id.header_text);
             final View divider = view.findViewById(R.id.divider);
             text.setText(mHeaderResId);
             divider.setVisibility(mNeedDivider ? View.VISIBLE : View.GONE);

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,36 +17,29 @@
 
 package com.android.messaging.ui.appsettings;
 
-import android.app.FragmentTransaction;
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.preference.Preference;
-import android.preference.Preference.OnPreferenceClickListener;
-import android.preference.PreferenceCategory;
-import android.preference.PreferenceFragment;
-import android.preference.PreferenceScreen;
 import android.text.TextUtils;
 import android.view.MenuItem;
 
-import androidx.appcompat.mms.MmsManager;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.app.NavUtils;
+import androidx.fragment.app.FragmentTransaction;
+import androidx.preference.Preference;
+import androidx.preference.PreferenceCategory;
+import androidx.preference.PreferenceFragmentCompat;
 
 import com.android.messaging.Factory;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.ParticipantRefresh;
 import com.android.messaging.datamodel.data.ParticipantData;
-import com.android.messaging.sms.ApnDatabase;
 import com.android.messaging.sms.MmsConfig;
-import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.ui.BugleActionBarActivity;
 import com.android.messaging.ui.UIIntents;
-import com.android.messaging.util.Assert;
 import com.android.messaging.util.BuglePrefs;
-import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.PhoneUtils;
 
 public class PerSubscriptionSettingsActivity extends BugleActionBarActivity {
@@ -62,23 +56,22 @@ public class PerSubscriptionSettingsActivity extends BugleActionBarActivity {
             // This will fall back to the default title, i.e. "Messaging settings," so No-op.
         }
 
-        final FragmentTransaction ft = getFragmentManager().beginTransaction();
+        final FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         final PerSubscriptionSettingsFragment fragment = new PerSubscriptionSettingsFragment();
         ft.replace(android.R.id.content, fragment);
         ft.commit();
     }
 
     @Override
-    public boolean onOptionsItemSelected(final MenuItem item) {
-        switch (item.getItemId()) {
-        case android.R.id.home:
+    public boolean onOptionsItemSelected(@NonNull final MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
             NavUtils.navigateUpFromSameTask(this);
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    public static class PerSubscriptionSettingsFragment extends PreferenceFragment
+    public static class PerSubscriptionSettingsFragment extends PreferenceFragmentCompat
             implements OnSharedPreferenceChangeListener {
         private PhoneNumberPreference mPhoneNumberPreference;
         private Preference mGroupMmsPreference;
@@ -91,12 +84,9 @@ public class PerSubscriptionSettingsActivity extends BugleActionBarActivity {
         }
 
         @Override
-        public void onCreate(final Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-
+        public void onCreatePreferences(@Nullable Bundle savedInstanceState, String rootKey) {
             // Get sub id from launch intent
-            final Intent intent = getActivity().getIntent();
-            Assert.notNull(intent);
+            final Intent intent = requireActivity().getIntent();
             mSubId = (intent != null) ? intent.getIntExtra(UIIntents.UI_INTENT_EXTRA_SUB_ID,
                     ParticipantData.DEFAULT_SELF_SUB_ID) : ParticipantData.DEFAULT_SELF_SUB_ID;
 
@@ -105,10 +95,10 @@ public class PerSubscriptionSettingsActivity extends BugleActionBarActivity {
             addPreferencesFromResource(R.xml.preferences_per_subscription);
 
             mPhoneNumberKey = getString(R.string.mms_phone_number_pref_key);
-            mPhoneNumberPreference = (PhoneNumberPreference) findPreference(mPhoneNumberKey);
-            final PreferenceCategory advancedCategory = (PreferenceCategory)
+            mPhoneNumberPreference = findPreference(mPhoneNumberKey);
+            final PreferenceCategory advancedCategory =
                     findPreference(getString(R.string.advanced_category_pref_key));
-            final PreferenceCategory mmsCategory = (PreferenceCategory)
+            final PreferenceCategory mmsCategory =
                     findPreference(getString(R.string.mms_messaging_category_pref_key));
 
             mPhoneNumberPreference.setDefaultPhoneNumber(
@@ -123,12 +113,9 @@ public class PerSubscriptionSettingsActivity extends BugleActionBarActivity {
                 // is being sent, making sure we will have a self number for group mms.
                 mmsCategory.removePreference(mGroupMmsPreference);
             } else {
-                mGroupMmsPreference.setOnPreferenceClickListener(new OnPreferenceClickListener() {
-                    @Override
-                    public boolean onPreferenceClick(Preference pref) {
-                        GroupMmsSettingDialog.showDialog(getActivity(), mSubId);
-                        return true;
-                    }
+                mGroupMmsPreference.setOnPreferenceClickListener(pref -> {
+                    GroupMmsSettingDialog.showDialog(getActivity(), mSubId);
+                    return true;
                 });
                 updateGroupMmsPrefSummary();
             }
@@ -137,44 +124,6 @@ public class PerSubscriptionSettingsActivity extends BugleActionBarActivity {
                 final Preference deliveryReportsPref = findPreference(
                         getString(R.string.delivery_reports_pref_key));
                 advancedCategory.removePreference(deliveryReportsPref);
-            }
-            final Preference wirelessAlertPref = findPreference(getString(
-                    R.string.wireless_alerts_key));
-            if (!isCellBroadcastAppLinkEnabled()) {
-                advancedCategory.removePreference(wirelessAlertPref);
-            } else {
-                wirelessAlertPref.setOnPreferenceClickListener(
-                        new Preference.OnPreferenceClickListener() {
-                            @Override
-                            public boolean onPreferenceClick(final Preference preference) {
-                                try {
-                                    startActivity(UIIntents.get().getWirelessAlertsIntent());
-                                } catch (final ActivityNotFoundException e) {
-                                    // Handle so we shouldn't crash if the wireless alerts
-                                    // implementation is broken.
-                                    LogUtil.e(LogUtil.BUGLE_TAG,
-                                            "Failed to launch wireless alerts activity", e);
-                                }
-                                return true;
-                            }
-                        });
-            }
-
-            // Access Point Names (APNs)
-            final PreferenceScreen apnsScreen =
-                    (PreferenceScreen) findPreference(getString(R.string.sms_apns_key));
-
-            if (!MmsManager.shouldUseLegacyMms()
-                    || (MmsUtils.useSystemApnTable() && !ApnDatabase.doesDatabaseExist())) {
-                // 1) Remove the ability to edit the local APN prefs if it doesn't use legacy APIs.
-                // 2) Don't remove the ability to edit the local APN prefs if this device lets us
-                // access the system APN, but we can't find the MCC/MNC in the APN table and we
-                // created the local APN table in case the MCC/MNC was in there. In other words,
-                // if the local APN table exists, let the user edit it.
-                advancedCategory.removePreference((Preference) apnsScreen);
-            } else {
-                apnsScreen.setIntent(UIIntents.get()
-                        .getApnSettingsIntent(getPreferenceScreen().getContext(), mSubId));
             }
 
             // We want to disable preferences if we are not the default app, but we do all of the
@@ -194,20 +143,6 @@ public class PerSubscriptionSettingsActivity extends BugleActionBarActivity {
             if (advancedCategory.getPreferenceCount() == 0) {
                 getPreferenceScreen().removePreference(advancedCategory);
             }
-        }
-
-        private boolean isCellBroadcastAppLinkEnabled() {
-            if (!MmsConfig.get(mSubId).getShowCellBroadcast()) {
-                return false;
-            }
-            try {
-                final PackageManager pm = getActivity().getPackageManager();
-                return pm.getApplicationEnabledSetting(UIIntents.CMAS_COMPONENT)
-                        != PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
-            } catch (final IllegalArgumentException ignored) {
-                // CMAS app not installed.
-            }
-            return false;
         }
 
         private void updateGroupMmsPrefSummary() {

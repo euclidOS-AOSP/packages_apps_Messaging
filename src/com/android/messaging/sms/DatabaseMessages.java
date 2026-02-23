@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +20,6 @@ package com.android.messaging.sms;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
-import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -29,19 +29,16 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.provider.Telephony.Mms;
 import android.provider.Telephony.Sms;
+import android.support.v7.mms.pdu.CharacterSets;
+import android.support.v7.mms.pdu.ContentType;
 import android.text.TextUtils;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.data.MessageData;
-import com.android.messaging.datamodel.media.VideoThumbnailRequest;
-import com.android.messaging.mmslib.pdu.CharacterSets;
-import com.android.messaging.util.Assert;
-import com.android.messaging.util.ContentType;
 import com.android.messaging.util.LogUtil;
 import com.android.messaging.util.MediaMetadataRetrieverWrapper;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 import com.google.common.collect.Lists;
 
@@ -50,6 +47,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,7 +64,7 @@ public class DatabaseMessages {
 
         @Override
         public boolean equals(final Object other) {
-            if (other == null || !(other instanceof DatabaseMessage)) {
+            if (!(other instanceof DatabaseMessage)) {
                 return false;
             }
             final DatabaseMessage otherDbMsg = (DatabaseMessage) other;
@@ -120,12 +118,6 @@ public class DatabaseMessages {
                 if (!MmsUtils.hasSmsDateSentColumn()) {
                     projection[INDEX_DATE_SENT] = Sms.DATE;
                 }
-                if (!OsUtil.isAtLeastL_MR1()) {
-                    Assert.equals(INDEX_SUB_ID, projection.length - 1);
-                    String[] withoutSubId = new String[projection.length - 1];
-                    System.arraycopy(projection, 0, withoutSubId, 0, withoutSubId.length);
-                    projection = withoutSubId;
-                }
 
                 sProjection = projection;
             }
@@ -151,8 +143,6 @@ public class DatabaseMessages {
 
         /**
          * Load from a cursor of a query that returns the SMS to import
-         *
-         * @param cursor
          */
         private void load(final Cursor cursor) {
             mRowId = cursor.getLong(INDEX_ID);
@@ -164,8 +154,8 @@ public class DatabaseMessages {
             mType = cursor.getInt(INDEX_TYPE);
             mThreadId = cursor.getLong(INDEX_THREAD_ID);
             mStatus = cursor.getInt(INDEX_STATUS);
-            mRead = cursor.getInt(INDEX_READ) == 0 ? false : true;
-            mSeen = cursor.getInt(INDEX_SEEN) == 0 ? false : true;
+            mRead = cursor.getInt(INDEX_READ) != 0;
+            mSeen = cursor.getInt(INDEX_SEEN) != 0;
             mUri = ContentUris.withAppendedId(Sms.CONTENT_URI, mRowId).toString();
             mSubId = PhoneUtils.getDefault().getSubIdFromTelephony(cursor, INDEX_SUB_ID);
         }
@@ -173,9 +163,6 @@ public class DatabaseMessages {
         /**
          * Get a new SmsMessage by loading from the cursor of a query
          * that returns the SMS to import
-         *
-         * @param cursor
-         * @return
          */
         public static SmsMessage get(final Cursor cursor) {
             final SmsMessage msg = new SmsMessage();
@@ -224,8 +211,7 @@ public class DatabaseMessages {
             mBody = in.readString();
         }
 
-        public static final Parcelable.Creator<SmsMessage> CREATOR
-                = new Parcelable.Creator<SmsMessage>() {
+        public static final Parcelable.Creator<SmsMessage> CREATOR = new Parcelable.Creator<>() {
             @Override
             public SmsMessage createFromParcel(final Parcel in) {
                 return new SmsMessage(in);
@@ -307,13 +293,6 @@ public class DatabaseMessages {
                     Mms.SUBSCRIPTION_ID,
                 };
 
-                if (!OsUtil.isAtLeastL_MR1()) {
-                    Assert.equals(INDEX_SUB_ID, projection.length - 1);
-                    String[] withoutSubId = new String[projection.length - 1];
-                    System.arraycopy(projection, 0, withoutSubId, 0, withoutSubId.length);
-                    projection = withoutSubId;
-                }
-
                 sProjection = projection;
             }
 
@@ -350,8 +329,6 @@ public class DatabaseMessages {
 
         /**
          * Load from a cursor of a query that returns the MMS to import
-         *
-         * @param cursor
          */
         public void load(final Cursor cursor) {
             mRowId = cursor.getLong(INDEX_ID);
@@ -373,8 +350,8 @@ public class DatabaseMessages {
             mThreadId = cursor.getLong(INDEX_THREAD_ID);
             mPriority = cursor.getInt(INDEX_PRIORITY);
             mStatus = cursor.getInt(INDEX_STATUS);
-            mRead = cursor.getInt(INDEX_READ) == 0 ? false : true;
-            mSeen = cursor.getInt(INDEX_SEEN) == 0 ? false : true;
+            mRead = cursor.getInt(INDEX_READ) != 0;
+            mSeen = cursor.getInt(INDEX_SEEN) != 0;
             mContentLocation = cursor.getString(INDEX_CONTENT_LOCATION);
             mTransactionId = cursor.getString(INDEX_TRANSACTION_ID);
             mMmsMessageType = cursor.getInt(INDEX_MESSAGE_TYPE);
@@ -391,9 +368,6 @@ public class DatabaseMessages {
         /**
          * Get a new MmsMessage by loading from the cursor of a query
          * that returns the MMS to import
-         *
-         * @param cursor
-         * @return
          */
         public static MmsMessage get(final Cursor cursor) {
             final MmsMessage msg = new MmsMessage();
@@ -402,8 +376,6 @@ public class DatabaseMessages {
         }
         /**
          * Add a loaded MMS part
-         *
-         * @param part
          */
         public void addPart(final MmsPart part) {
             mParts.add(part);
@@ -501,15 +473,14 @@ public class DatabaseMessages {
             mRetrieveStatus = in.readInt();
 
             final int nParts = in.readInt();
-            mParts = new ArrayList<MmsPart>();
+            mParts = new ArrayList<>();
             mPartsProcessed = false;
             for (int i = 0; i < nParts; i++) {
-                mParts.add((MmsPart) in.readParcelable(getClass().getClassLoader()));
+                mParts.add(in.readParcelable(getClass().getClassLoader()));
             }
         }
 
-        public static final Parcelable.Creator<MmsMessage> CREATOR
-                = new Parcelable.Creator<MmsMessage>() {
+        public static final Parcelable.Creator<MmsMessage> CREATOR = new Parcelable.Creator<>() {
             @Override
             public MmsMessage createFromParcel(final Parcel in) {
                 return new MmsMessage(in);
@@ -588,8 +559,6 @@ public class DatabaseMessages {
 
         /**
          * Load from a cursor of a query that returns the MMS part to import
-         *
-         * @param cursor
          */
         public void load(final Cursor cursor, final boolean loadMedia) {
             mRowId = cursor.getLong(INDEX_ID);
@@ -722,11 +691,6 @@ public class DatabaseMessages {
          * Load video file of a video part and parse the dimensions and type
          */
         private void loadVideo() {
-            // This is a coarse check, and should not be applied to outgoing messages. However,
-            // currently, this does not cause any problems.
-            if (!VideoThumbnailRequest.shouldShowIncomingVideoThumbnails()) {
-                return;
-            }
             final Uri uri = getDataUri();
             final MediaMetadataRetrieverWrapper retriever = new MediaMetadataRetrieverWrapper();
             try {
@@ -755,32 +719,6 @@ public class DatabaseMessages {
         }
 
         /**
-         * Get media file size
-         */
-        private long getMediaFileSize() {
-            final Context context = Factory.get().getApplicationContext();
-            final Uri uri = getDataUri();
-            AssetFileDescriptor fd = null;
-            try {
-                fd = context.getContentResolver().openAssetFileDescriptor(uri, "r");
-                if (fd != null) {
-                    return fd.getParcelFileDescriptor().getStatSize();
-                }
-            } catch (final FileNotFoundException e) {
-                LogUtil.e(TAG, "DatabaseMessages.MmsPart: cound not find media file: " + e, e);
-            } finally {
-                if (fd != null) {
-                    try {
-                        fd.close();
-                    } catch (final IOException e) {
-                        LogUtil.e(TAG, "DatabaseMessages.MmsPart: failed to close " + e, e);
-                    }
-                }
-            }
-            return 0L;
-        }
-
-        /**
          * @return If the type is a text type that stores text embedded (i.e. in db table)
          */
         private boolean isEmbeddedTextType() {
@@ -792,9 +730,7 @@ public class DatabaseMessages {
         /**
          * Get an instance of the MMS part from the part table cursor
          *
-         * @param cursor
          * @param loadMedia Whether to load the media file of the part
-         * @return
          */
         public static MmsPart get(final Cursor cursor, final boolean loadMedia) {
             final MmsPart part = new MmsPart();
@@ -840,8 +776,7 @@ public class DatabaseMessages {
             mSize = in.readLong();
         }
 
-        public static final Parcelable.Creator<MmsPart> CREATOR
-                = new Parcelable.Creator<MmsPart>() {
+        public static final Parcelable.Creator<MmsPart> CREATOR = new Parcelable.Creator<>() {
             @Override
             public MmsPart createFromParcel(final Parcel in) {
                 return new MmsPart(in);
@@ -923,7 +858,7 @@ public class DatabaseMessages {
         }
 
         public static final Parcelable.Creator<LocalDatabaseMessage> CREATOR
-                = new Parcelable.Creator<LocalDatabaseMessage>() {
+                = new Parcelable.Creator<>() {
             @Override
             public LocalDatabaseMessage createFromParcel(final Parcel in) {
                 return new LocalDatabaseMessage(in);
@@ -979,11 +914,7 @@ public class DatabaseMessages {
                 final String name = CharacterSets.getMimeName(charset);
                 return new String(data, name);
             } catch (final UnsupportedEncodingException e) {
-                try {
-                    return new String(data, CharacterSets.MIMENAME_ISO_8859_1);
-                } catch (final UnsupportedEncodingException exception) {
-                    return new String(data); // system default encoding.
-                }
+                return new String(data, StandardCharsets.ISO_8859_1);
             }
         }
     }

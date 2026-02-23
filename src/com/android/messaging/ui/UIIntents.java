@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +17,6 @@
 package com.android.messaging.ui;
 
 import android.app.Activity;
-import android.app.Fragment;
 import android.app.PendingIntent;
 import android.content.ContentValues;
 import android.content.Context;
@@ -25,6 +25,8 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
+
+import androidx.fragment.app.Fragment;
 
 import com.android.messaging.Factory;
 import com.android.messaging.datamodel.data.MessageData;
@@ -72,7 +74,7 @@ public abstract class UIIntents {
     // Sending VCard uri to VCard detail activity
     public static final String UI_INTENT_EXTRA_VCARD_URI = "vcard_uri";
 
-    public static final String CMAS_COMPONENT = "com.android.cellbroadcastreceiver";
+    public static final String CMAS_COMPONENT = "com.android.cellbroadcastreceiver.module";
 
     // Intent action for local broadcast receiver for conversation self id change.
     public static final String CONVERSATION_SELF_ID_CHANGE_BROADCAST_ACTION =
@@ -154,11 +156,6 @@ public abstract class UIIntents {
             final MessageData draft);
 
     /**
-     * Launch debug activity to set MMS config options.
-     */
-    public abstract void launchDebugMmsConfigActivity(final Context context);
-
-    /**
      * Launch an activity to change settings.
      */
     public abstract void launchSettingsActivity(final Context context);
@@ -167,20 +164,6 @@ public abstract class UIIntents {
      * Launch an activity to add a contact with a given destination.
      */
     public abstract void launchAddContactActivity(final Context context, final String destination);
-
-    /**
-     * Launch an activity to show the document picker to pick an image/video/audio.
-     *
-     * @param fragment the requesting fragment
-     */
-    public abstract void launchDocumentImagePicker(final Fragment fragment);
-
-    /**
-     * Launch an activity to show the contacts list to pick one.
-     *
-     * @param fragment the requesting fragment
-     */
-    public abstract void launchContactCardPicker(final Fragment fragment);
 
     /**
      * Launch an activity to show people & options for a given conversation.
@@ -227,12 +210,6 @@ public abstract class UIIntents {
     public abstract void launchSaveVCardToContactsActivity(Context context, Uri vcardUri);
 
     /**
-     * Launch an activity to let the user select & unselect the list of attachments to send.
-     */
-    public abstract void launchAttachmentChooserActivity(final Activity activity,
-            final String conversationId, final int requestCode);
-
-    /**
      * Launch full screen video viewer.
      */
     public abstract void launchFullScreenVideoViewer(Context context, Uri videoUri);
@@ -263,21 +240,6 @@ public abstract class UIIntents {
      * @param url display the data in the url to users
      */
     public abstract Intent getViewUrlIntent(final String url);
-
-    /**
-     * Get an intent to launch the ringtone picker
-     * @param title the title to show in the ringtone picker
-     * @param existingUri the currently set uri
-     * @param defaultUri the default uri if none is currently set
-     * @param toneType type of ringtone to pick, maybe any of RingtoneManager.TYPE_*
-     */
-    public abstract Intent getRingtonePickerIntent(final String title, final Uri existingUri,
-            final Uri defaultUri, final int toneType);
-
-    /**
-     * Get an intent to launch the wireless alert viewer.
-     */
-    public abstract Intent getWirelessAlertsIntent();
 
     /**
      * Get an intent to launch the dialog for changing the default SMS App.
@@ -334,25 +296,10 @@ public abstract class UIIntents {
             final int requestCode);
 
     /**
-     * Get a PendingIntent for showing low storage notifications.
-     */
-    public abstract PendingIntent getPendingIntentForLowStorageNotifications(final Context context);
-
-    /**
      * Get a PendingIntent for showing a new message to a secondary user.
      */
     public abstract PendingIntent getPendingIntentForSecondaryUserNewMessageNotification(
             final Context context);
-
-    /**
-     * Get an intent for showing the APN editor.
-     */
-    public abstract Intent getApnEditorIntent(final Context context, final String rowId, int subId);
-
-    /**
-     * Get an intent for showing the APN settings.
-     */
-    public abstract Intent getApnSettingsIntent(final Context context, final int subId);
 
     /**
      * Get an intent for showing advanced settings.

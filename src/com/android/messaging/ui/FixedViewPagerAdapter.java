@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +18,8 @@ package com.android.messaging.ui;
 
 import android.os.Bundle;
 import android.os.Parcelable;
+
+import androidx.annotation.NonNull;
 import androidx.viewpager.widget.PagerAdapter;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,7 +27,6 @@ import android.view.ViewGroup;
 import com.android.messaging.Factory;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.UiUtils;
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * A PagerAdapter that provides a fixed number of paged Views provided by a fixed set of
@@ -39,8 +41,9 @@ public class FixedViewPagerAdapter<T extends PagerViewHolder> extends PagerAdapt
         mViewHolders = viewHolders;
     }
 
+    @NonNull
     @Override
-    public Object instantiateItem(final ViewGroup container, final int position) {
+    public Object instantiateItem(@NonNull final ViewGroup container, final int position) {
         final PagerViewHolder viewHolder = getViewHolder(position);
         final View view = viewHolder.getView(container);
         if (view == null) {
@@ -52,7 +55,8 @@ public class FixedViewPagerAdapter<T extends PagerViewHolder> extends PagerAdapt
     }
 
     @Override
-    public void destroyItem(final ViewGroup container, final int position, final Object object) {
+    public void destroyItem(@NonNull final ViewGroup container, final int position,
+                            @NonNull final Object object) {
         final PagerViewHolder viewHolder = getViewHolder(position);
         final View destroyedView = viewHolder.destroyView();
         if (destroyedView != null) {
@@ -66,7 +70,7 @@ public class FixedViewPagerAdapter<T extends PagerViewHolder> extends PagerAdapt
     }
 
     @Override
-    public boolean isViewFromObject(final View view, final Object object) {
+    public boolean isViewFromObject(final View view, @NonNull final Object object) {
         return view.getTag() == object;
     }
 
@@ -74,7 +78,6 @@ public class FixedViewPagerAdapter<T extends PagerViewHolder> extends PagerAdapt
         return getViewHolder(i, true /* rtlAware */);
     }
 
-    @VisibleForTesting
     public T getViewHolder(final int i, final boolean rtlAware) {
         return mViewHolders[rtlAware ? getRtlPosition(i) : i];
     }
@@ -105,7 +108,7 @@ public class FixedViewPagerAdapter<T extends PagerViewHolder> extends PagerAdapt
             ((Bundle) state).setClassLoader(Factory.get().getApplicationContext().getClassLoader());
             for (int i = 0; i < mViewHolders.length; i++) {
                 final Parcelable pageState = restoredViewHolderState
-                        .getParcelable(getInstanceStateKeyForPage(i));
+                        .getParcelable(getInstanceStateKeyForPage(i), Parcelable.class);
                 getViewHolder(i).restoreState(pageState);
             }
         } else {

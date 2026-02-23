@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +32,6 @@ import com.android.messaging.datamodel.MediaScratchFileProvider;
 import com.android.messaging.datamodel.data.PersonItemData;
 import com.android.messaging.util.ContactUtil;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.SafeAsyncTask;
 import com.android.vcard.VCardEntry;
 import com.android.vcard.VCardEntry.EmailData;
 import com.android.vcard.VCardEntry.ImData;
@@ -42,10 +42,11 @@ import com.android.vcard.VCardEntry.PostalData;
 import com.android.vcard.VCardEntry.WebsiteData;
 import com.android.vcard.VCardProperty;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 /**
  * Holds one entry item (i.e. a single contact) within a VCard resource. It is able to take
@@ -71,13 +72,9 @@ public class VCardResourceEntry {
     void close() {
         // If the avatar image was temporarily saved in the scratch folder, remove that.
         if (MediaScratchFileProvider.isMediaScratchSpaceUri(mAvatarUri)) {
-            SafeAsyncTask.executeOnThreadPool(new Runnable() {
-                @Override
-                public void run() {
+            Executors.newSingleThreadExecutor().execute(() ->
                     Factory.get().getApplicationContext().getContentResolver().delete(
-                            mAvatarUri, null, null);
-                }
-            });
+                            mAvatarUri, null, null));
         }
     }
 
@@ -166,7 +163,7 @@ public class VCardResourceEntry {
             final VCardEntry vcard) {
         final Resources resources = Factory.get().getApplicationContext().getResources();
         final List<VCardResourceEntry.VCardResourceEntryDestinationItem> retList =
-                new ArrayList<VCardResourceEntry.VCardResourceEntryDestinationItem>();
+                new ArrayList<>();
         if (vcard.getPhoneList() != null) {
             for (final PhoneData phone : vcard.getPhoneList()) {
                 final Intent intent = new Intent(Intent.ACTION_DIAL);
@@ -203,11 +200,8 @@ public class VCardResourceEntry {
                 }
                 Intent intent = new Intent(Intent.ACTION_VIEW);
                 final String address = formatAddress(postalData);
-                try {
-                    intent.setData(Uri.parse("geo:0,0?q=" + URLEncoder.encode(address, "UTF-8")));
-                } catch (UnsupportedEncodingException e) {
-                    intent = null;
-                }
+                intent.setData(Uri.parse("geo:0,0?q=" + URLEncoder.encode(address,
+                        StandardCharsets.UTF_8)));
 
                 retList.add(new VCardResourceEntryDestinationItem(address, type, intent));
             }
@@ -228,7 +222,7 @@ public class VCardResourceEntry {
 
         if (vcard.getOrganizationList() != null) {
             for (final OrganizationData organtization : vcard.getOrganizationList()) {
-                String type = null;
+                String type;
                 try {
                      type = resources.getString(Organization.getTypeLabelResource(
                                     organtization.getType()));
@@ -270,7 +264,7 @@ public class VCardResourceEntry {
 
         if (vcard.getNotes() != null) {
             for (final NoteData note : vcard.getNotes()) {
-                 final ArrayMap<String, String> curChildMap = new ArrayMap<String, String>();
+                 final ArrayMap<String, String> curChildMap = new ArrayMap<>();
                  if (TextUtils.isGraphic(note.getNote())){
                      retList.add(new VCardResourceEntryDestinationItem(note.getNote(),
                              resources.getString(R.string.vcard_detail_notes_label), null));

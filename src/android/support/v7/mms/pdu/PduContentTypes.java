@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007 Esmertec AG.
  * Copyright (C) 2007 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +16,14 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms.pdu;
+package android.support.v7.mms.pdu;
 
 public class PduContentTypes {
     /**
      * All content types. From:
      * http://www.openmobilealliance.org/tech/omna/omna-wsp-content-type.htm
      */
-    static final String[] contentTypes = {
+    public static final String[] contentTypes = {
         "*/*",                                        /* 0x00 */
         "text/*",                                     /* 0x01 */
         "text/html",                                  /* 0x02 */

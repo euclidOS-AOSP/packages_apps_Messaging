@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,30 +24,23 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
 import android.os.Handler;
-import android.os.Looper;
-import androidx.appcompat.mms.CarrierConfigValuesLoader;
-import androidx.appcompat.mms.MmsManager;
+import android.support.v7.mms.CarrierConfigValuesLoader;
+import android.support.v7.mms.MmsManager;
 import android.telephony.CarrierConfigManager;
+
+import androidx.annotation.NonNull;
 
 import com.android.messaging.datamodel.DataModel;
 import com.android.messaging.receiver.SmsReceiver;
-import com.android.messaging.sms.ApnDatabase;
 import com.android.messaging.sms.BugleApnSettingsLoader;
 import com.android.messaging.sms.BugleUserAgentInfoLoader;
 import com.android.messaging.sms.MmsConfig;
 import com.android.messaging.ui.ConversationDrawables;
-import com.android.messaging.util.BugleGservices;
-import com.android.messaging.util.BugleGservicesKeys;
-import com.android.messaging.util.BuglePrefs;
 import com.android.messaging.util.BuglePrefsKeys;
-import com.android.messaging.util.DebugUtils;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
 import com.android.messaging.util.Trace;
-import com.google.common.annotations.VisibleForTesting;
 
-import java.io.File;
 import java.lang.Thread.UncaughtExceptionHandler;
 
 /**
@@ -56,32 +50,13 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
     private static final String TAG = LogUtil.BUGLE_TAG;
 
     private UncaughtExceptionHandler sSystemUncaughtExceptionHandler;
-    private static boolean sRunningTests = false;
-
-    @VisibleForTesting
-    protected static void setTestsRunning() {
-        sRunningTests = true;
-    }
-
-    /**
-     * @return true if we're running unit tests.
-     */
-    public static boolean isRunningTests() {
-        return sRunningTests;
-    }
 
     @Override
     public void onCreate() {
         Trace.beginSection("app.onCreate");
         super.onCreate();
 
-        // Note onCreate is called in both test and real application environments
-        if (!sRunningTests) {
-            // Only create the factory if not running tests
-            FactoryImpl.register(getApplicationContext(), this);
-        } else {
-            LogUtil.e(TAG, "BugleApplication.onCreate: FactoryImpl.register skipped for test run");
-        }
+        FactoryImpl.register(getApplicationContext(), this);
 
         sSystemUncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler(this);
@@ -89,7 +64,7 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
     }
 
     @Override
-    public void onConfigurationChanged(final Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull final Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
 
         // Update conversation drawables when changing writing systems
@@ -101,26 +76,18 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
     public void initializeSync(final Factory factory) {
         Trace.beginSection("app.initializeSync");
         final Context context = factory.getApplicationContext();
-        final BugleGservices bugleGservices = factory.getBugleGservices();
-        final BuglePrefs buglePrefs = factory.getApplicationPrefs();
         final DataModel dataModel = factory.getDataModel();
         final CarrierConfigValuesLoader carrierConfigValuesLoader =
                 factory.getCarrierConfigValuesLoader();
 
-        maybeStartProfiling();
-
         BugleApplication.updateAppConfig(context);
 
         // Initialize MMS lib
-        initMmsLib(context, bugleGservices, carrierConfigValuesLoader);
-        // Initialize APN database
-        ApnDatabase.initializeAppContext(context);
+        initMmsLib(context, carrierConfigValuesLoader);
         // Fixup messages in flight if we crashed and send any pending
         dataModel.onApplicationCreated();
         // Register carrier config change receiver
-        if (OsUtil.isAtLeastM()) {
-            registerCarrierConfigChangeReceiver(context);
-        }
+        registerCarrierConfigChangeReceiver(context);
 
         Trace.endSection();
     }
@@ -136,25 +103,11 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
         Context.RECEIVER_EXPORTED/*UNAUDITED*/);
     }
 
-    private static void initMmsLib(final Context context, final BugleGservices bugleGservices,
+    private static void initMmsLib(final Context context,
             final CarrierConfigValuesLoader carrierConfigValuesLoader) {
         MmsManager.setApnSettingsLoader(new BugleApnSettingsLoader(context));
         MmsManager.setCarrierConfigValuesLoader(carrierConfigValuesLoader);
         MmsManager.setUserAgentInfoLoader(new BugleUserAgentInfoLoader(context));
-        MmsManager.setUseWakeLock(true);
-        // If Gservices is configured not to use mms api, force MmsManager to always use
-        // legacy mms sending logic
-        MmsManager.setForceLegacyMms(!bugleGservices.getBoolean(
-                BugleGservicesKeys.USE_MMS_API_IF_PRESENT,
-                BugleGservicesKeys.USE_MMS_API_IF_PRESENT_DEFAULT));
-        bugleGservices.registerForChanges(new Runnable() {
-            @Override
-            public void run() {
-                MmsManager.setForceLegacyMms(!bugleGservices.getBoolean(
-                        BugleGservicesKeys.USE_MMS_API_IF_PRESENT,
-                        BugleGservicesKeys.USE_MMS_API_IF_PRESENT_DEFAULT));
-            }
-        });
     }
 
     public static void updateAppConfig(final Context context) {
@@ -182,48 +135,15 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
     }
 
     @Override
-    public void uncaughtException(final Thread thread, final Throwable ex) {
+    public void uncaughtException(@NonNull final Thread thread, @NonNull final Throwable ex) {
         final boolean background = getMainLooper().getThread() != thread;
         if (background) {
             LogUtil.e(TAG, "Uncaught exception in background thread " + thread, ex);
 
             final Handler handler = new Handler(getMainLooper());
-            handler.post(new Runnable() {
-
-                @Override
-                public void run() {
-                    sSystemUncaughtExceptionHandler.uncaughtException(thread, ex);
-                }
-            });
+            handler.post(() -> sSystemUncaughtExceptionHandler.uncaughtException(thread, ex));
         } else {
             sSystemUncaughtExceptionHandler.uncaughtException(thread, ex);
-        }
-    }
-
-    private void maybeStartProfiling() {
-        // App startup profiling support. To use it:
-        //  adb shell setprop log.tag.BugleProfile DEBUG
-        //  #   Start the app, wait for a 30s, download trace file:
-        //  adb pull /data/data/com.android.messaging/cache/startup.trace /tmp
-        //  # Open trace file (using adt/tools/traceview)
-        if (android.util.Log.isLoggable(LogUtil.PROFILE_TAG, android.util.Log.DEBUG)) {
-            // Start method tracing with a big enough buffer and let it run for 30s.
-            // Note we use a logging tag as we don't want to wait for gservices to start up.
-            final File file = DebugUtils.getDebugFile("startup.trace", true);
-            if (file != null) {
-                android.os.Debug.startMethodTracing(file.getAbsolutePath(), 160 * 1024 * 1024);
-                new Handler(Looper.getMainLooper()).postDelayed(
-                       new Runnable() {
-                            @Override
-                            public void run() {
-                                android.os.Debug.stopMethodTracing();
-                                // Allow world to see trace file
-                                DebugUtils.ensureReadable(file);
-                                LogUtil.d(LogUtil.PROFILE_TAG, "Tracing complete - "
-                                     + file.getAbsolutePath());
-                            }
-                        }, 30000);
-            }
         }
     }
 
@@ -239,13 +159,8 @@ public class BugleApplication extends Application implements UncaughtExceptionHa
                 // Perform upgrade on application-wide prefs.
                 factory.getApplicationPrefs().onUpgrade(existingVersion, targetVersion);
                 // Perform upgrade on each subscription's prefs.
-                PhoneUtils.forEachActiveSubscription(new PhoneUtils.SubscriptionRunnable() {
-                    @Override
-                    public void runForSubscription(final int subId) {
-                        factory.getSubscriptionPrefs(subId)
-                                .onUpgrade(existingVersion, targetVersion);
-                    }
-                });
+                PhoneUtils.forEachActiveSubscription(subId -> factory.getSubscriptionPrefs(subId)
+                        .onUpgrade(existingVersion, targetVersion));
                 factory.getApplicationPrefs().putInt(BuglePrefsKeys.SHARED_PREFERENCES_VERSION,
                         targetVersion);
             } catch (final Exception ex) {

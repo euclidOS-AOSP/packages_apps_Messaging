@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +22,10 @@ import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.DataSetObserver;
 import android.os.Handler;
+
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
 import android.util.Log;
 import android.view.ViewGroup;
 import android.widget.FilterQueryProvider;
@@ -82,7 +86,8 @@ public abstract class CursorRecyclerAdapter<VH extends RecyclerView.ViewHolder>
      * @deprecated This option is discouraged, as it results in Cursor queries
      * being performed on the application's UI thread and thus can cause poor
      * responsiveness or even Application Not Responding errors.  As an alternative,
-     * use {@link android.app.LoaderManager} with a {@link android.content.CursorLoader}.
+     * use {@link androidx.loader.app.LoaderManager} with a
+     * {@link androidx.loader.content.CursorLoader}.
      */
     @Deprecated
     public static final int FLAG_AUTO_REQUERY = 0x01;
@@ -185,13 +190,14 @@ public abstract class CursorRecyclerAdapter<VH extends RecyclerView.ViewHolder>
         }
     }
 
+    @NonNull
     @Override
-    public VH onCreateViewHolder(final ViewGroup parent, final int viewType) {
+    public VH onCreateViewHolder(@NonNull final ViewGroup parent, final int viewType) {
         return createViewHolder(mContext, parent, viewType);
     }
 
     @Override
-    public void onBindViewHolder(final VH holder, final int position) {
+    public void onBindViewHolder(@NonNull final VH holder, final int position) {
         if (!mDataValid) {
             throw new IllegalStateException("this should only be called when the cursor is valid");
         }
@@ -202,7 +208,6 @@ public abstract class CursorRecyclerAdapter<VH extends RecyclerView.ViewHolder>
     }
     /**
      * Bind an existing view to the data pointed to by cursor
-     * @param view Existing view, returned earlier by newView
      * @param context Interface to application's global information
      * @param cursor The cursor from which to get the data. The cursor is already
      * moved to the correct position.

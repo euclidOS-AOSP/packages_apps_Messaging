@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package androidx.appcompat.mms;
+package android.support.v7.mms;
 
 import android.app.PendingIntent;
 import android.content.ContentResolver;
@@ -81,25 +82,23 @@ class DownloadRequest extends MmsRequest {
         if (contentUri == null || pdu == null) {
             return false;
         }
-        final Callable<Boolean> copyDownloadedPduToOutput = new Callable<Boolean>() {
-            public Boolean call() {
-                ParcelFileDescriptor.AutoCloseOutputStream outStream = null;
-                try {
-                    final ContentResolver cr = context.getContentResolver();
-                    final ParcelFileDescriptor pduFd = cr.openFileDescriptor(contentUri, "w");
-                    outStream = new ParcelFileDescriptor.AutoCloseOutputStream(pduFd);
-                    outStream.write(pdu);
-                    return true;
-                } catch (IOException e) {
-                    Log.e(MmsService.TAG, "Writing PDU to downloader: IO exception", e);
-                    return false;
-                } finally {
-                    if (outStream != null) {
-                        try {
-                            outStream.close();
-                        } catch (IOException ex) {
-                            // Ignore
-                        }
+        final Callable<Boolean> copyDownloadedPduToOutput = () -> {
+            ParcelFileDescriptor.AutoCloseOutputStream outStream = null;
+            try {
+                final ContentResolver cr = context.getContentResolver();
+                final ParcelFileDescriptor pduFd = cr.openFileDescriptor(contentUri, "w");
+                outStream = new ParcelFileDescriptor.AutoCloseOutputStream(pduFd);
+                outStream.write(pdu);
+                return true;
+            } catch (IOException e) {
+                Log.e(MmsService.TAG, "Writing PDU to downloader: IO exception", e);
+                return false;
+            } finally {
+                if (outStream != null) {
+                    try {
+                        outStream.close();
+                    } catch (IOException ex) {
+                        // Ignore
                     }
                 }
             }
@@ -115,8 +114,7 @@ class DownloadRequest extends MmsRequest {
         return false;
     }
 
-    public static final Parcelable.Creator<DownloadRequest> CREATOR
-            = new Parcelable.Creator<DownloadRequest>() {
+    public static final Parcelable.Creator<DownloadRequest> CREATOR = new Parcelable.Creator<>() {
         public DownloadRequest createFromParcel(Parcel in) {
             return new DownloadRequest(in);
         }

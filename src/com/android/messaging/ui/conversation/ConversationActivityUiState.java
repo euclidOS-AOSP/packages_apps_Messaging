@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +19,10 @@ package com.android.messaging.ui.conversation;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import androidx.annotation.NonNull;
+
 import com.android.messaging.ui.contact.ContactPickerFragment;
 import com.android.messaging.util.Assert;
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Keeps track of the different UI states that the ConversationActivity may be in. This acts as
@@ -273,7 +275,7 @@ public class ConversationActivityUiState implements Parcelable, Cloneable {
     }
 
     public static final Parcelable.Creator<ConversationActivityUiState> CREATOR
-        = new Parcelable.Creator<ConversationActivityUiState>() {
+        = new Parcelable.Creator<>() {
         @Override
         public ConversationActivityUiState createFromParcel(final Parcel in) {
             return new ConversationActivityUiState(in);
@@ -285,6 +287,7 @@ public class ConversationActivityUiState implements Parcelable, Cloneable {
         }
     };
 
+    @NonNull
     @Override
     protected ConversationActivityUiState clone() {
         try {
@@ -294,13 +297,5 @@ public class ConversationActivityUiState implements Parcelable, Cloneable {
                     "reference?");
         }
         return null;
-    }
-
-    /**
-     * allows for overridding the internal UI state. Should never be called except by test code.
-     */
-    @VisibleForTesting
-    void testSetUiState(final int uiState) {
-        mConversationContactUiState = uiState;
     }
 }

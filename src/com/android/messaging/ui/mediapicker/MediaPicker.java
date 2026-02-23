@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +17,9 @@
 
 package com.android.messaging.ui.mediapicker;
 
-import android.app.Activity;
-import android.app.Fragment;
 import android.content.Context;
-import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import androidx.viewpager.widget.PagerAdapter;
-import androidx.viewpager.widget.ViewPager;
-import androidx.appcompat.app.ActionBar;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -34,6 +29,13 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.ActionBar;
+import androidx.fragment.app.Fragment;
+import androidx.viewpager.widget.PagerAdapter;
+import androidx.viewpager.widget.ViewPager;
+
 import com.android.messaging.Factory;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.DataModel;
@@ -41,16 +43,15 @@ import com.android.messaging.datamodel.binding.Binding;
 import com.android.messaging.datamodel.binding.BindingBase;
 import com.android.messaging.datamodel.binding.ImmutableBindingRef;
 import com.android.messaging.datamodel.data.DraftMessageData;
+import com.android.messaging.datamodel.data.DraftMessageData.DraftMessageSubscriptionDataProvider;
 import com.android.messaging.datamodel.data.MediaPickerData;
 import com.android.messaging.datamodel.data.MessagePartData;
 import com.android.messaging.datamodel.data.PendingAttachmentData;
-import com.android.messaging.datamodel.data.DraftMessageData.DraftMessageSubscriptionDataProvider;
 import com.android.messaging.ui.BugleActionBarActivity;
 import com.android.messaging.ui.FixedViewPagerAdapter;
 import com.android.messaging.util.AccessibilityUtil;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.UiUtils;
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -154,7 +155,6 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
     /** The theme color to use to make the media picker match the rest of the UI */
     private int mThemeColor;
 
-    @VisibleForTesting
     final Binding<MediaPickerData> mBinding = BindingBase.createBinding(this);
 
     /** Provides subscription-related data to access per-subscription configurations. */
@@ -169,7 +169,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
 
     public MediaPicker(final Context context) {
         mBinding.bind(DataModel.get().createMediaPickerData(context));
-        mEnabledChoosers = new ArrayList<MediaChooser>();
+        mEnabledChoosers = new ArrayList<>();
         mChoosers = new MediaChooser[] {
             new CameraMediaChooser(this),
             new GalleryMediaChooser(this),
@@ -178,7 +178,6 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
         };
 
         mOpen = false;
-        setSupportedMediaTypes(MEDIA_TYPE_ALL);
     }
 
     private boolean mIsAttached;
@@ -186,9 +185,10 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
     private boolean mAnimateOnAttach;
 
     @Override
-    public void onAttach (final Activity activity) {
-        super.onAttach(activity);
+    public void onAttach(@NonNull final Context context) {
+        super.onAttach(context);
         mIsAttached = true;
+        setSupportedMediaTypes(MEDIA_TYPE_ALL);
         if (mStartingMediaTypeOnAttach != MEDA_TYPE_INVALID) {
             // open() was previously called. Do the pending open now.
             doOpen(mStartingMediaTypeOnAttach, mAnimateOnAttach);
@@ -198,7 +198,6 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mBinding.getData().init(getLoaderManager());
     }
 
     @Override
@@ -211,21 +210,19 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
                 container,
                 false);
         mMediaPickerPanel.setMediaPicker(this);
-        mTabStrip = (LinearLayout) mMediaPickerPanel.findViewById(R.id.mediapicker_tabstrip);
+        mTabStrip = mMediaPickerPanel.findViewById(R.id.mediapicker_tabstrip);
         mTabStrip.setBackgroundColor(mThemeColor);
         for (final MediaChooser chooser : mChoosers) {
             chooser.onCreateTabButton(inflater, mTabStrip);
-            final boolean enabled = (chooser.getSupportedMediaTypes() & mSupportedMediaTypes) !=
-                    MEDIA_TYPE_NONE;
             final ImageButton tabButton = chooser.getTabButton();
             if (tabButton != null) {
-                tabButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
+                tabButton.setVisibility(View.GONE); // we make them visible in onViewCreated
                 mTabStrip.addView(tabButton);
             }
         }
 
-        mViewPager = (ViewPager) mMediaPickerPanel.findViewById(R.id.mediapicker_view_pager);
-        mViewPager.setOnPageChangeListener(new ViewPager.OnPageChangeListener() {
+        mViewPager = mMediaPickerPanel.findViewById(R.id.mediapicker_view_pager);
+        mViewPager.addOnPageChangeListener(new ViewPager.OnPageChangeListener() {
             @Override
             public void onPageScrolled(
                     final int position,
@@ -261,28 +258,25 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
     }
 
     @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        for (final MediaChooser chooser : mChoosers) {
+            final boolean enabled = (chooser.getSupportedMediaTypes() & mSupportedMediaTypes) !=
+                    MEDIA_TYPE_NONE;
+            final ImageButton tabButton = chooser.getTabButton();
+            if (tabButton != null) {
+                tabButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
+            }
+        }
+    }
+
+    @Override
     public void onPause() {
         super.onPause();
-        CameraManager.get().onPause();
         for (final MediaChooser chooser : mEnabledChoosers) {
             chooser.onPause();
         }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        CameraManager.get().onResume();
-
-        for (final MediaChooser chooser : mEnabledChoosers) {
-            chooser.onResume();
-        }
-    }
-
-    @Override
-    public void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        mSelectedChooser.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
@@ -428,7 +422,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
         }
         final MediaChooser[] enabledChoosers = new MediaChooser[mEnabledChoosers.size()];
         mEnabledChoosers.toArray(enabledChoosers);
-        mPagerAdapter = new FixedViewPagerAdapter<MediaChooser>(enabledChoosers);
+        mPagerAdapter = new FixedViewPagerAdapter<>(enabledChoosers);
         if (mViewPager != null) {
             mViewPager.setAdapter(mPagerAdapter);
         }
@@ -438,7 +432,6 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
         if (mBinding.isBound() && getActivity() != null) {
             mBinding.unbind();
             mBinding.bind(DataModel.get().createMediaPickerData(getActivity()));
-            mBinding.getData().init(getLoaderManager());
         }
     }
 
@@ -540,15 +533,9 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
         mOpen = true;
         mPagerAdapter.notifyDataSetChanged();
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onOpened();
-                }
-            });
+            mListenerHandler.post(() -> mListener.onOpened());
         }
         if (mSelectedChooser != null) {
-            mSelectedChooser.onFullScreenChanged(false);
             mSelectedChooser.onOpenedChanged(true);
         }
     }
@@ -557,12 +544,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
         setHasOptionsMenu(false);
         mOpen = false;
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onDismissed();
-                }
-            });
+            mListenerHandler.post(() -> mListener.onDismissed());
         }
         if (mSelectedChooser != null) {
             mSelectedChooser.onOpenedChanged(false);
@@ -572,20 +554,12 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
     void dispatchFullScreen(final boolean fullScreen) {
         setHasOptionsMenu(fullScreen);
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onFullScreenChanged(fullScreen);
-                }
-            });
-        }
-        if (mSelectedChooser != null) {
-            mSelectedChooser.onFullScreenChanged(fullScreen);
+            mListenerHandler.post(() -> mListener.onFullScreenChanged(fullScreen));
         }
     }
 
     void dispatchItemsSelected(final MessagePartData item, final boolean dismissMediaPicker) {
-        final List<MessagePartData> items = new ArrayList<MessagePartData>(1);
+        final List<MessagePartData> items = new ArrayList<>(1);
         items.add(item);
         dispatchItemsSelected(items, dismissMediaPicker);
     }
@@ -593,12 +567,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
     void dispatchItemsSelected(final Collection<MessagePartData> items,
             final boolean dismissMediaPicker) {
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onItemsSelected(items, dismissMediaPicker);
-                }
-            });
+            mListenerHandler.post(() -> mListener.onItemsSelected(items, dismissMediaPicker));
         }
 
         if (isFullScreen() && !dismissMediaPicker) {
@@ -608,12 +577,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
 
     void dispatchItemUnselected(final MessagePartData item) {
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onItemUnselected(item);
-                }
-            });
+            mListenerHandler.post(() -> mListener.onItemUnselected(item));
         }
 
         if (isFullScreen()) {
@@ -623,23 +587,13 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
 
     void dispatchConfirmItemSelection() {
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onConfirmItemSelection();
-                }
-            });
+            mListenerHandler.post(() -> mListener.onConfirmItemSelection());
         }
     }
 
     void dispatchPendingItemAdded(final PendingAttachmentData pendingItem) {
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onPendingItemAdded(pendingItem);
-                }
-            });
+            mListenerHandler.post(() -> mListener.onPendingItemAdded(pendingItem));
         }
 
         if (isFullScreen()) {
@@ -649,12 +603,7 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
 
     void dispatchChooserSelected(final int chooserIndex) {
         if (mListener != null) {
-            mListenerHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    mListener.onChooserSelected(chooserIndex);
-                }
-            });
+            mListenerHandler.post(() -> mListener.onChooserSelected(chooserIndex));
         }
     }
 
@@ -677,10 +626,8 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
     }
 
     @Override
-    public void onCreateOptionsMenu(final Menu menu, final MenuInflater inflater) {
-        if (mSelectedChooser != null) {
-            mSelectedChooser.onCreateOptionsMenu(inflater, menu);
-        }
+    public void onCreateOptionsMenu(@NonNull final Menu menu,
+                                    @NonNull final MenuInflater inflater) {
     }
 
     @Override
@@ -699,19 +646,5 @@ public class MediaPicker extends Fragment implements DraftMessageSubscriptionDat
 
     public ImmutableBindingRef<MediaPickerData> getMediaPickerDataBinding() {
         return BindingBase.createBindingReference(mBinding);
-    }
-
-    protected static final int CAMERA_PERMISSION_REQUEST_CODE = 1;
-    protected static final int LOCATION_PERMISSION_REQUEST_CODE = 2;
-    protected static final int RECORD_AUDIO_PERMISSION_REQUEST_CODE = 3;
-    protected static final int GALLERY_PERMISSION_REQUEST_CODE = 4;
-    protected static final int READ_CONTACT_PERMISSION_REQUEST_CODE = 5;
-
-    @Override
-    public void onRequestPermissionsResult(
-            final int requestCode, final String permissions[], final int[] grantResults) {
-        if (mSelectedChooser != null) {
-            mSelectedChooser.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        }
     }
 }

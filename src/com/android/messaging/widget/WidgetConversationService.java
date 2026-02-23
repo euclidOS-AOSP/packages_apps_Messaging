@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024-2025 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +44,6 @@ import com.android.messaging.datamodel.media.MediaResourceManager;
 import com.android.messaging.datamodel.media.MessagePartImageRequestDescriptor;
 import com.android.messaging.datamodel.media.MessagePartVideoThumbnailRequestDescriptor;
 import com.android.messaging.datamodel.media.UriImageRequestDescriptor;
-import com.android.messaging.datamodel.media.VideoThumbnailRequest;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.ui.UIIntents;
 import com.android.messaging.util.AvatarUriUtil;
@@ -61,9 +61,7 @@ public class WidgetConversationService extends RemoteViewsService {
 
     @Override
     public RemoteViewsFactory onGetViewFactory(Intent intent) {
-        if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-            LogUtil.v(TAG, "onGetViewFactory intent: " + intent);
-        }
+        LogUtil.v(TAG, "onGetViewFactory intent: " + intent);
         return new WidgetConversationFactory(getApplicationContext(), intent);
     }
 
@@ -72,24 +70,20 @@ public class WidgetConversationService extends RemoteViewsService {
      */
     private static class WidgetConversationFactory extends BaseWidgetFactory {
         private ImageResource mImageResource;
-        private String mConversationId;
+        private final String mConversationId;
 
         public WidgetConversationFactory(Context context, Intent intent) {
             super(context, intent);
 
             mConversationId = intent.getStringExtra(UIIntents.UI_INTENT_EXTRA_CONVERSATION_ID);
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "BugleFactory intent: " + intent + "widget id: " + mAppWidgetId);
-            }
+            LogUtil.v(TAG, "BugleFactory intent: " + intent + "widget id: " + mAppWidgetId);
             mIconSize = (int) context.getResources()
                     .getDimension(R.dimen.contact_icon_view_normal_size);
         }
 
         @Override
         public void onCreate() {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "onCreate");
-            }
+            LogUtil.v(TAG, "onCreate");
             super.onCreate();
 
             // If the conversation for this widget has been removed, we want to update the widget to
@@ -107,7 +101,7 @@ public class WidgetConversationService extends RemoteViewsService {
             }
             final Uri uri = MessagingContentProvider.buildConversationMessagesUri(mConversationId);
             if (uri != null) {
-                LogUtil.w(TAG, "doQuery uri: " + uri.toString());
+                LogUtil.w(TAG, "doQuery uri: " + uri);
             }
             return mContext.getContentResolver().query(uri,
                     ConversationMessageData.getProjection(),
@@ -167,21 +161,17 @@ public class WidgetConversationService extends RemoteViewsService {
                 if (cursorCount > MAX_ITEMS_TO_SHOW) {
                     scrollToPosition += cursorCount - MAX_ITEMS_TO_SHOW;
                 }
-                if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                    LogUtil.v(TAG, "getViewAt position: " + originalPosition +
-                            " computed position: " + position +
-                            " scrollToPosition: " + scrollToPosition +
-                            " cursorCount: " + cursorCount +
-                            " MAX_ITEMS_TO_SHOW: " + MAX_ITEMS_TO_SHOW);
-                }
+                LogUtil.v(TAG, "getViewAt position: " + originalPosition +
+                        " computed position: " + position +
+                        " scrollToPosition: " + scrollToPosition +
+                        " cursorCount: " + cursorCount +
+                        " MAX_ITEMS_TO_SHOW: " + MAX_ITEMS_TO_SHOW);
 
                 intent.putExtra(UIIntents.UI_INTENT_EXTRA_MESSAGE_POSITION, scrollToPosition);
                 if (message.hasAttachments()) {
                     final List<MessagePartData> attachments = message.getAttachments();
                     for (MessagePartData part : attachments) {
-                        final boolean videoWithThumbnail = part.isVideo()
-                                && (VideoThumbnailRequest.shouldShowIncomingVideoThumbnails()
-                                || !message.getIsIncoming());
+                        final boolean videoWithThumbnail = part.isVideo();
                         if (part.isImage() || videoWithThumbnail) {
                             final Uri uri = part.getContentUri();
                             remoteViews.setViewVisibility(R.id.attachmentFrame, View.VISIBLE);
@@ -215,19 +205,12 @@ public class WidgetConversationService extends RemoteViewsService {
                         intent);
 
                 // Avatar
-                boolean includeAvatar;
-                if (OsUtil.isAtLeastJB()) {
-                    final Bundle options = mAppWidgetManager.getAppWidgetOptions(mAppWidgetId);
-                    if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                        LogUtil.v(TAG, "getViewAt BugleWidgetProvider.WIDGET_SIZE_KEY: " +
-                                options.getInt(BugleWidgetProvider.WIDGET_SIZE_KEY));
-                    }
+                final Bundle options = mAppWidgetManager.getAppWidgetOptions(mAppWidgetId);
+                LogUtil.v(TAG, "getViewAt BugleWidgetProvider.WIDGET_SIZE_KEY: " +
+                        options.getInt(BugleWidgetProvider.WIDGET_SIZE_KEY));
 
-                    includeAvatar = options.getInt(BugleWidgetProvider.WIDGET_SIZE_KEY)
-                            == BugleWidgetProvider.SIZE_LARGE;
-                } else {
-                    includeAvatar = true;
-                }
+                boolean includeAvatar = options.getInt(BugleWidgetProvider.WIDGET_SIZE_KEY)
+                        == BugleWidgetProvider.SIZE_LARGE;
 
                 // Show the avatar (and shadow) when grande size, otherwise hide it.
                 remoteViews.setViewVisibility(R.id.avatarView, includeAvatar ?
@@ -271,7 +254,7 @@ public class WidgetConversationService extends RemoteViewsService {
             int titleResId = -1;
             int statusResId = -1;
             boolean showInRed = false;
-            String statusText = null;
+            String statusText;
             switch(message.getStatus()) {
                 case MessageData.BUGLE_STATUS_INCOMING_AUTO_DOWNLOADING:
                 case MessageData.BUGLE_STATUS_INCOMING_MANUAL_DOWNLOADING:
@@ -334,7 +317,7 @@ public class WidgetConversationService extends RemoteViewsService {
                 case MessageData.BUGLE_STATUS_INCOMING_COMPLETE:
                 default:
                     if (!message.getCanClusterWithNextMessage()) {
-                        statusText = Dates.getWidgetTimeString(message.getReceivedTimeStamp(),
+                        Dates.getWidgetTimeString(message.getReceivedTimeStamp(),
                                 false /*abbreviated*/).toString();
                     }
                     break;
@@ -395,7 +378,8 @@ public class WidgetConversationService extends RemoteViewsService {
                 final Spannable colorStr = new SpannableString(statusText);
                 if (showInRed) {
                     colorStr.setSpan(new ForegroundColorSpan(
-                            mContext.getResources().getColor(R.color.timestamp_text_failed)),
+                            mContext.getResources().getColor(R.color.timestamp_text_failed,
+                                    mContext.getTheme())),
                             0, statusText.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
                 remoteViews.setTextViewText(R.id.date, colorStr);
@@ -466,9 +450,7 @@ public class WidgetConversationService extends RemoteViewsService {
          */
         @Override
         protected RemoteViews getViewMoreItemsView() {
-            if (LogUtil.isLoggable(TAG, LogUtil.VERBOSE)) {
-                LogUtil.v(TAG, "getViewMoreConversationsView");
-            }
+            LogUtil.v(TAG, "getViewMoreConversationsView");
             final RemoteViews view = new RemoteViews(mContext.getPackageName(),
                     R.layout.widget_loading);
             view.setTextViewText(

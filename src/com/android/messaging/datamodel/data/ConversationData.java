@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2024 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +17,18 @@
 
 package com.android.messaging.datamodel.data;
 
-import android.app.LoaderManager;
 import android.content.Context;
-import android.content.Loader;
 import android.database.Cursor;
 import android.database.CursorWrapper;
-import android.database.sqlite.SQLiteFullException;
 import android.net.Uri;
 import android.os.Bundle;
-import androidx.annotation.Nullable;
 import android.text.TextUtils;
 
-import com.android.common.contacts.DataUsageStatUpdater;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.content.Loader;
+
 import com.android.messaging.Factory;
 import com.android.messaging.R;
 import com.android.messaging.datamodel.BoundCursorLoader;
@@ -49,18 +50,12 @@ import com.android.messaging.sms.MmsSmsUtils;
 import com.android.messaging.sms.MmsUtils;
 import com.android.messaging.util.Assert;
 import com.android.messaging.util.Assert.RunsOnMainThread;
-import com.android.messaging.util.ContactUtil;
 import com.android.messaging.util.LogUtil;
-import com.android.messaging.util.OsUtil;
 import com.android.messaging.util.PhoneUtils;
-import com.android.messaging.util.SafeAsyncTask;
 import com.android.messaging.widget.WidgetConversationProvider;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 public class ConversationData extends BindableData {
 
@@ -69,47 +64,13 @@ public class ConversationData extends BindableData {
     private static final long LAST_MESSAGE_TIMESTAMP_NaN = -1;
     private static final int MESSAGE_COUNT_NaN = -1;
 
-    /**
-     * Takes a conversation id and a list of message ids and computes the positions
-     * for each message.
-     */
-    public List<Integer> getPositions(final String conversationId, final List<Long> ids) {
-        final ArrayList<Integer> result = new ArrayList<Integer>();
-
-        if (ids.isEmpty()) {
-            return result;
-        }
-
-        final Cursor c = new ConversationData.ReversedCursor(
-                DataModel.get().getDatabase().rawQuery(
-                        ConversationMessageData.getConversationMessageIdsQuerySql(),
-                        new String [] { conversationId }));
-        if (c != null) {
-            try {
-                final Set<Long> idsSet = new HashSet<Long>(ids);
-                if (c.moveToLast()) {
-                    do {
-                        final long messageId = c.getLong(0);
-                        if (idsSet.contains(messageId)) {
-                            result.add(c.getPosition());
-                        }
-                    } while (c.moveToPrevious());
-                }
-            } finally {
-                c.close();
-            }
-        }
-        Collections.sort(result);
-        return result;
-    }
-
     public interface ConversationDataListener {
-        public void onConversationMessagesCursorUpdated(ConversationData data, Cursor cursor,
+        void onConversationMessagesCursorUpdated(ConversationData data, Cursor cursor,
                 @Nullable ConversationMessageData newestMessage, boolean isSync);
-        public void onConversationMetadataUpdated(ConversationData data);
-        public void closeConversation(String conversationId);
-        public void onConversationParticipantDataLoaded(ConversationData data);
-        public void onSubscriptionListDataLoaded(ConversationData data);
+        void onConversationMetadataUpdated(ConversationData data);
+        void closeConversation(String conversationId);
+        void onConversationParticipantDataLoaded(ConversationData data);
+        void onSubscriptionListDataLoaded(ConversationData data);
     }
 
     private static class ReversedCursor extends CursorWrapper {
@@ -180,6 +141,7 @@ public class ConversationData extends BindableData {
      * A trampoline class so that we can inherit from LoaderManager.LoaderCallbacks multiple times.
      */
     private class MetadataLoaderCallbacks implements LoaderManager.LoaderCallbacks<Cursor> {
+        @NonNull
         @Override
         public Loader<Cursor> onCreateLoader(final int id, final Bundle args) {
             Assert.equals(CONVERSATION_META_DATA_LOADER, id);
@@ -200,7 +162,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoadFinished(final Loader<Cursor> generic, final Cursor data) {
+        public void onLoadFinished(@NonNull final Loader<Cursor> generic, final Cursor data) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -227,7 +189,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoaderReset(final Loader<Cursor> generic) {
+        public void onLoaderReset(@NonNull final Loader<Cursor> generic) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -246,6 +208,7 @@ public class ConversationData extends BindableData {
      * A trampoline class so that we can inherit from LoaderManager.LoaderCallbacks multiple times.
      */
     private class MessagesLoaderCallbacks implements LoaderManager.LoaderCallbacks<Cursor> {
+        @NonNull
         @Override
         public Loader<Cursor> onCreateLoader(final int id, final Bundle args) {
             Assert.equals(CONVERSATION_MESSAGES_LOADER, id);
@@ -268,7 +231,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoadFinished(final Loader<Cursor> generic, final Cursor rawData) {
+        public void onLoadFinished(@NonNull final Loader<Cursor> generic, final Cursor rawData) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -316,7 +279,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoaderReset(final Loader<Cursor> generic) {
+        public void onLoaderReset(@NonNull final Loader<Cursor> generic) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -349,6 +312,7 @@ public class ConversationData extends BindableData {
      * A trampoline class so that we can inherit from LoaderManager.LoaderCallbacks multiple times.
      */
     private class ParticipantLoaderCallbacks implements LoaderManager.LoaderCallbacks<Cursor> {
+        @NonNull
         @Override
         public Loader<Cursor> onCreateLoader(final int id, final Bundle args) {
             Assert.equals(PARTICIPANT_LOADER, id);
@@ -369,7 +333,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoadFinished(final Loader<Cursor> generic, final Cursor data) {
+        public void onLoadFinished(@NonNull final Loader<Cursor> generic, final Cursor data) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -383,7 +347,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoaderReset(final Loader<Cursor> generic) {
+        public void onLoaderReset(@NonNull final Loader<Cursor> generic) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -400,6 +364,7 @@ public class ConversationData extends BindableData {
      * A trampoline class so that we can inherit from LoaderManager.LoaderCallbacks multiple times.
      */
     private class SelfParticipantLoaderCallbacks implements LoaderManager.LoaderCallbacks<Cursor> {
+        @NonNull
         @Override
         public Loader<Cursor> onCreateLoader(final int id, final Bundle args) {
             Assert.equals(SELF_PARTICIPANT_LOADER, id);
@@ -422,7 +387,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoadFinished(final Loader<Cursor> generic, final Cursor data) {
+        public void onLoadFinished(@NonNull final Loader<Cursor> generic, final Cursor data) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -437,7 +402,7 @@ public class ConversationData extends BindableData {
         }
 
         @Override
-        public void onLoaderReset(final Loader<Cursor> generic) {
+        public void onLoaderReset(@NonNull final Loader<Cursor> generic) {
             final BoundCursorLoader loader = (BoundCursorLoader) generic;
 
             // Check if data still bound to the requesting ui element
@@ -539,6 +504,16 @@ public class ConversationData extends BindableData {
         mLoaderManager.initLoader(SELF_PARTICIPANT_LOADER, args, mSelfParticipantLoaderCallbacks);
     }
 
+    public void restart(final BindingBase<ConversationData> binding) {
+        final Bundle args = new Bundle();
+        args.putString(BINDING_ID, binding.getBindingId());
+        mLoaderManager.restartLoader(CONVERSATION_META_DATA_LOADER, args, mMetadataLoaderCallbacks);
+        mLoaderManager.restartLoader(CONVERSATION_MESSAGES_LOADER, args, mMessagesLoaderCallbacks);
+        mLoaderManager.restartLoader(PARTICIPANT_LOADER, args, mParticipantsLoaderCallbacks);
+        mLoaderManager.restartLoader(SELF_PARTICIPANT_LOADER, args,
+                mSelfParticipantLoaderCallbacks);
+    }
+
     @Override
     protected void unregisterListeners() {
         mListeners.clear();
@@ -595,7 +570,7 @@ public class ConversationData extends BindableData {
         Assert.isTrue(TextUtils.equals(mConversationId, message.getConversationId()));
         Assert.isTrue(binding.getData() == this);
 
-        if (!OsUtil.isAtLeastL_MR1() || message.getSelfId() == null) {
+        if (message.getSelfId() == null) {
             InsertNewMessageAction.insertNewMessage(message);
         } else {
             final int systemDefaultSubId = PhoneUtils.getDefault().getDefaultSmsSubscriptionId();
@@ -624,26 +599,6 @@ public class ConversationData extends BindableData {
                     phones.add(participant.getSendDestination());
                 }
             }
-        }
-
-        if (ContactUtil.hasReadContactsPermission()) {
-            SafeAsyncTask.executeOnThreadPool(new Runnable() {
-                @Override
-                public void run() {
-                    final DataUsageStatUpdater updater = new DataUsageStatUpdater(
-                            Factory.get().getApplicationContext());
-                    try {
-                        if (!phones.isEmpty()) {
-                            updater.updateWithPhoneNumber(phones);
-                        }
-                        if (!emails.isEmpty()) {
-                            updater.updateWithAddress(emails);
-                        }
-                    } catch (final SQLiteFullException ex) {
-                        LogUtil.w(TAG, "Unable to update contact", ex);
-                    }
-                }
-            });
         }
     }
 
@@ -767,8 +722,7 @@ public class ConversationData extends BindableData {
         // 1. Framework has MSIM support AND
         // 2. The device has had multiple *active* subscriptions. AND
         // 3. The message's subscription is active.
-        if (OsUtil.isAtLeastL_MR1() &&
-                selfParticipantsData.getSelfParticipantsCountExcludingDefault(true) > 1) {
+        if (selfParticipantsData.getSelfParticipantsCountExcludingDefault(true) > 1) {
             return subscriptionListData.getActiveSubscriptionEntryBySelfId(selfParticipantId,
                     excludeDefault);
         }
